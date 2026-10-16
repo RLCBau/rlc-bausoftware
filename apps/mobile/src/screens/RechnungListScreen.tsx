@@ -1,23 +1,11 @@
-﻿import React, { useCallback, useLayoutEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  FlatList,
-  SafeAreaView,
-  Alert,
-  Platform,
-  TextInput,
-} from "react-native";
+import React, { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { Alert, FlatList, Pressable, SafeAreaView, Text, TextInput, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
-import { COLORS } from "../ui/theme";
-
+import { COLORS, createRlcStyles } from "../ui/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "RechnungList">;
-
 type RechnungRow = {
   id: string;
   pos: string;
@@ -26,7 +14,6 @@ type RechnungRow = {
   qty: string;
   ep: string;
 };
-
 type AbschlagItem = {
   id: string;
   nummer: number;
@@ -37,997 +24,557 @@ type AbschlagItem = {
   pdfUri?: string;
   createdAt?: number;
 };
-
 type RechnungDoc = {
   id: string;
   sourceType?: "FREE" | "ANGEBOT" | "MENGEN";
-
   angebotId?: string | null;
   mengenId?: string | null;
-
   rechnungNr: string;
   datum: string;
   leistungszeitraum?: string;
-
   customerName: string;
   address?: string;
   email?: string;
   phone?: string;
-
-  iban?: string;
-  bic?: string;
-  bank?: string;
-  owner?: string;
-
-  steuerNr?: string;
-  ustId?: string;
-
   zahlungsziel?: string;
   mwstPct?: string;
-
   note?: string;
   pdfUri?: string;
-
   rows: RechnungRow[];
   abschlaege?: AbschlagItem[];
-
   netto?: number;
   mwst?: number;
   brutto?: number;
-
   createdAt?: string | number;
   updatedAt?: string | number;
 };
-
 const KEY_PREFIX = "rlc_rechnung_list:";
-
-function storageKey(projectCode: string) {
-  return `${KEY_PREFIX}${projectCode}`;
+function storageKeys(projectCode?: string, projectId?: string) {
+  return Array.from(new Set([projectCode, projectId].map(v => String(v || "").trim()).filter(Boolean).map(v => `${KEY_PREFIX}${v}`)));
 }
-
-function num(v: string | number | null | undefined) {
+async function loadStoredRechnungen(projectCode?: string, projectId?: string) {
+  for (const key of storageKeys(projectCode, projectId)) {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) continue;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return {
+      key,
+      items: parsed as RechnungDoc[]
+    };
+  }
+  return {
+    key: `${KEY_PREFIX}${String(projectCode || projectId || "")}`,
+    items: [] as RechnungDoc[]
+  };
+}
+function num(v: unknown) {
   return Number(String(v ?? "").replace(",", ".") || 0);
 }
-
 function money(v: number) {
   return Number(v || 0).toLocaleString("de-DE", {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: 2
   });
 }
-
 function normalizeAbschlag(input: any, idx: number): AbschlagItem {
   return {
-    id: String(input?.id || `${Date.now()}_${idx}`),
-    nummer: Number(input?.nummer || idx + 1),
+    id: String(input?.id || `abschlag_${idx + 1}`),
+    nummer: Number(input?.nummer || input?.abschlagNr || idx + 1),
     datum: String(input?.datum || ""),
-    betrag: Number(input?.betrag || 0),
-    prozent:
-      input?.prozent === null || input?.prozent === undefined
-        ? undefined
-        : Number(input.prozent || 0),
+    betrag: Number(input?.betrag || input?.brutto || 0),
+    prozent: input?.prozent == null ? undefined : Number(input.prozent || 0),
     note: String(input?.note || ""),
     pdfUri: String(input?.pdfUri || ""),
-    createdAt: Number(input?.createdAt || Date.now()),
+    createdAt: Number(input?.createdAt || Date.now())
   };
 }
-
 function normalizeDoc(input: any): RechnungDoc {
   return {
+    ...input,
     id: String(input?.id || ""),
     sourceType: input?.sourceType || "FREE",
-
-    angebotId: input?.angebotId || null,
-    mengenId: input?.mengenId || null,
-
     rechnungNr: String(input?.rechnungNr || ""),
     datum: String(input?.datum || ""),
     leistungszeitraum: String(input?.leistungszeitraum || ""),
-
     customerName: String(input?.customerName || ""),
-    address: String(input?.address || ""),
-    email: String(input?.email || ""),
-    phone: String(input?.phone || ""),
-
-    iban: String(input?.iban || ""),
-    bic: String(input?.bic || ""),
-    bank: String(input?.bank || ""),
-    owner: String(input?.owner || ""),
-
-    steuerNr: String(input?.steuerNr || ""),
-    ustId: String(input?.ustId || ""),
-
-    zahlungsziel: String(input?.zahlungsziel || ""),
     mwstPct: String(input?.mwstPct || "19"),
-
-    note: String(input?.note || ""),
-    pdfUri: String(input?.pdfUri || ""),
     rows: Array.isArray(input?.rows) ? input.rows : [],
-    abschlaege: Array.isArray(input?.abschlaege)
-      ? input.abschlaege.map((a: any, i: number) => normalizeAbschlag(a, i))
-      : [],
-
-    netto: typeof input?.netto === "number" ? input.netto : undefined,
-    mwst: typeof input?.mwst === "number" ? input.mwst : undefined,
-    brutto: typeof input?.brutto === "number" ? input.brutto : undefined,
-
-    createdAt: input?.createdAt || "",
-    updatedAt: input?.updatedAt || "",
+    abschlaege: Array.isArray(input?.abschlaege) ? input.abschlaege.map((a: any, i: number) => normalizeAbschlag(a, i)).sort((a: AbschlagItem, b: AbschlagItem) => a.nummer - b.nummer) : []
   };
 }
-
 function calcNetto(rows: RechnungRow[]) {
-  return (Array.isArray(rows) ? rows : []).reduce((sum, r) => {
-    return sum + num(r?.qty) * num(r?.ep);
-  }, 0);
+  return (rows || []).reduce((sum, row) => sum + num(row?.qty) * num(row?.ep), 0);
 }
-
 function calcBrutto(doc: RechnungDoc) {
-  if (typeof doc?.brutto === "number" && Number.isFinite(doc.brutto)) {
-    return doc.brutto;
-  }
+  if (typeof doc.brutto === "number" && Number.isFinite(doc.brutto)) return doc.brutto;
   const netto = calcNetto(doc.rows || []);
-  const mwstPct = num(doc?.mwstPct || "19");
-  return netto + (netto * mwstPct) / 100;
+  return netto + netto * num(doc.mwstPct || "19") / 100;
 }
-
 function calcAbschlagSum(doc: RechnungDoc) {
-  return (doc.abschlaege || []).reduce(
-    (sum, a) => sum + Number(a?.betrag || 0),
-    0
-  );
+  return (doc.abschlaege || []).reduce((sum, item) => sum + Number(item.betrag || 0), 0);
 }
-
-function calcRest(doc: RechnungDoc) {
-  return Math.max(0, calcBrutto(doc) - calcAbschlagSum(doc));
-}
-
-function sourceLabel(doc: RechnungDoc) {
-  switch (doc.sourceType) {
-    case "ANGEBOT":
-      return "Aus Angebot";
-    case "MENGEN":
-      return "Aus Mengen";
-    default:
-      return "Freie Rechnung";
-  }
-}
-
-function sourceBadgeStyle(sourceType?: string) {
-  switch (sourceType) {
-    case "ANGEBOT":
-      return {
-        bg: COLORS.accentSoft,
-        border: COLORS.border,
-        text: COLORS.accent,
-      };
-    case "MENGEN":
-      return {
-        bg: COLORS.successBg,
-        border: COLORS.successSoft,
-        text: COLORS.success,
-      };
-    default:
-      return {
-        bg: COLORS.card2,
-        border: COLORS.border,
-        text: COLORS.text,
-      };
-  }
-}
-
 function parseTime(v?: string | number) {
   if (typeof v === "number") return v;
   const t = Date.parse(String(v || ""));
   return Number.isFinite(t) ? t : 0;
 }
-
-export default function RechnungListScreen({ route, navigation }: Props) {
-  const { projectId, projectCode, title } = route.params;
-
+export default function RechnungListScreen({
+  route,
+  navigation
+}: Props) {
+  const {
+    projectId,
+    projectCode,
+    title
+  } = route.params;
   const [items, setItems] = useState<RechnungDoc[]>([]);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
-
-  useLayoutEffect(() => {
-    navigation.setOptions({ title: "Rechnungen" });
-  }, [navigation]);
-
+  useLayoutEffect(() => navigation.setOptions({
+    title: "Rechnungen"
+  }), [navigation]);
   const load = useCallback(async () => {
     try {
       setBusy(true);
-
-      const raw = await AsyncStorage.getItem(storageKey(projectCode));
-      const listRaw: RechnungDoc[] = raw ? JSON.parse(raw) : [];
-      const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeDoc);
-
-      list.sort((a, b) => {
-        const ta = parseTime(a.updatedAt || a.createdAt || a.datum);
-        const tb = parseTime(b.updatedAt || b.createdAt || b.datum);
-        return tb - ta;
-      });
-
+      const stored = await loadStoredRechnungen(projectCode, projectId);
+      const list = stored.items.map(normalizeDoc).sort((a, b) => parseTime(b.updatedAt || b.createdAt || b.datum) - parseTime(a.updatedAt || a.createdAt || a.datum));
       setItems(list);
     } catch (e: any) {
-      Alert.alert(
-        "Rechnungen",
-        String(e?.message || "Rechnungen konnten nicht geladen werden")
-      );
+      Alert.alert("Rechnungen", String(e?.message || "Rechnungen konnten nicht geladen werden."));
     } finally {
       setBusy(false);
     }
-  }, [projectCode]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load])
-  );
-
+  }, [projectCode, projectId]);
+  useFocusEffect(useCallback(() => {
+    void load();
+  }, [load]));
   async function deleteItem(id: string) {
-    try {
-      const raw = await AsyncStorage.getItem(storageKey(projectCode));
-      const listRaw: RechnungDoc[] = raw ? JSON.parse(raw) : [];
-      const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeDoc);
-      const next = list.filter((x) => x.id !== id);
-
-      await AsyncStorage.setItem(storageKey(projectCode), JSON.stringify(next));
-      setItems(next);
-    } catch (e: any) {
-      Alert.alert(
-        "Fehler",
-        String(e?.message || "Rechnung konnte nicht gelöscht werden")
-      );
-    }
+    const stored = await loadStoredRechnungen(projectCode, projectId);
+    const next = stored.items.map(normalizeDoc).filter(x => x.id !== id);
+    await AsyncStorage.setItem(stored.key, JSON.stringify(next));
+    setItems(next);
   }
-
-  function confirmDelete(id: string) {
-    Alert.alert("Rechnung löschen", "Möchtest du diese Rechnung wirklich löschen?", [
-      { text: "Abbrechen", style: "cancel" },
-      {
+  function showMore(item: RechnungDoc) {
+    Alert.alert(item.rechnungNr || "Rechnung", "Aktion auswählen", [{
+      text: "Abbrechen",
+      style: "cancel"
+    }, {
+      text: "Schlussrechnung erstellen",
+      onPress: () => navigation.navigate("Schlussrechnung", {
+        projectId,
+        projectCode,
+        title: "Schlussrechnung",
+        rechnungId: item.id
+      } as any)
+    }, {
+      text: "Rechnung löschen",
+      style: "destructive",
+      onPress: () => Alert.alert("Rechnung löschen", "Rechnung einschließlich ihrer Abschläge löschen?", [{
+        text: "Abbrechen",
+        style: "cancel"
+      }, {
         text: "Löschen",
         style: "destructive",
-        onPress: () => void deleteItem(id),
-      },
-    ]);
+        onPress: () => void deleteItem(item.id)
+      }])
+    }]);
   }
-
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     if (!term) return items;
-
-    return items.filter((it) => {
-      const brutto = calcBrutto(it);
-      const bezahlt = calcAbschlagSum(it);
-      const rest = calcRest(it);
-
-      const hay = [
-        it.rechnungNr,
-        it.customerName,
-        it.datum,
-        it.leistungszeitraum,
-        sourceLabel(it),
-        money(brutto),
-        money(bezahlt),
-        money(rest),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return hay.includes(term);
-    });
+    return items.filter(it => [it.rechnungNr, it.customerName, it.datum, money(calcBrutto(it))].join(" ").toLowerCase().includes(term));
   }, [items, q]);
-
-  const totalBrutto = useMemo(
-    () => filtered.reduce((sum, it) => sum + calcBrutto(it), 0),
-    [filtered]
-  );
-
-  const totalBezahlt = useMemo(
-    () => filtered.reduce((sum, it) => sum + calcAbschlagSum(it), 0),
-    [filtered]
-  );
-
-  const totalRest = useMemo(
-    () => filtered.reduce((sum, it) => sum + calcRest(it), 0),
-    [filtered]
-  );
-
-  const hasAnyInvoices = filtered.length > 0;
-
-  return (
-    <SafeAreaView style={s.safe}>
-      <FlatList
-        data={filtered}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={s.wrap}
-        showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View>
-            <View style={s.hero}>
-              <View style={s.heroTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.eyebrow}>RLC Bausoftware</Text>
+  const totals = useMemo(() => filtered.reduce((acc, it) => {
+    const total = calcBrutto(it);
+    const paid = calcAbschlagSum(it);
+    acc.total += total;
+    acc.paid += paid;
+    acc.open += Math.max(0, total - paid);
+    return acc;
+  }, {
+    total: 0,
+    paid: 0,
+    open: 0
+  }), [filtered]);
+  return <SafeAreaView style={s.safe}>
+      <FlatList data={filtered} keyExtractor={item => item.id} contentContainerStyle={s.wrap} showsVerticalScrollIndicator={false} ListHeaderComponent={<View>
+            <View style={s.headerCard}>
+              <View style={s.headerLine}>
+                <View style={s._inline1}>
                   <Text style={s.title}>Rechnungen</Text>
-                  <Text style={s.sub}>
-                    Rechnungen, Abschläge und Schlussrechnung pro Projekt verwalten.
-                  </Text>
+                  <Text style={s.sub}>{title || projectCode || projectId}</Text>
                 </View>
-
-                <Pressable
-                  style={[s.kiBtn, { display: "none" }]}
-                  onPress={() =>
-                    navigation.navigate("SupportChat", {
-                      projectId,
-                      projectCode,
-                      title: "RLC KI",
-                      screen: "RechnungList",
-                    })
-                  }
-                >
-                  <Text style={s.kiBtnTxt}>RLC KI</Text>
+                <Pressable style={s.newBtn} onPress={() => navigation.navigate("RechnungEditor", {
+            projectId,
+            projectCode,
+            title: "Neue Rechnung",
+            typ: "RECHNUNG"
+          })}>
+                  <Text style={s.newBtnTxt}>+ Neu</Text>
                 </Pressable>
               </View>
 
-              <View style={s.badgeRow}>
-                <View style={s.badge}>
-                  <Text style={s.badgeTxt}>Projekt: {title || "—"}</Text>
-                </View>
-                <View style={s.badge}>
-                  <Text style={s.badgeTxt}>Code: {projectCode}</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={s.panel}>
-              <Pressable
-                style={s.primaryBtn}
-                onPress={() =>
-                  navigation.navigate("RechnungEditor", {
-                    projectId,
-                    projectCode,
-                    title: "Rechnung",
-                    typ: "RECHNUNG",
-                  })
-                }
-              >
-                <Text style={s.primaryBtnTxt}>+ Neue Rechnung</Text>
-              </Pressable>
-
-              <View style={s.dualRow}>
-                <Pressable
-                  style={s.secondaryActionBtn}
-                  onPress={() =>
-                    navigation.navigate("AbschlagList", {
-                      projectId,
-                      projectCode,
-                      title: "Abschlagsrechnungen",
-                    })
-                  }
-                >
-                  <Text style={s.secondaryActionBtnTxt}>Abschläge</Text>
-                </Pressable>
-
-                <Pressable
-                  style={[
-                    s.secondaryActionBtn,
-                    !hasAnyInvoices && s.disabled,
-                  ]}
-                  disabled={!hasAnyInvoices}
-                  onPress={() => {
-                    const first = filtered[0];
-                    if (!first?.id) {
-                      Alert.alert(
-                        "Hinweis",
-                        "Es ist noch keine Rechnung vorhanden."
-                      );
-                      return;
-                    }
-
-                    navigation.navigate("Schlussrechnung", {
-                      projectId,
-                      projectCode,
-                      title: "Schlussrechnung",
-                      rechnungId: first.id,
-                    } as any);
-                  }}
-                >
-                  <Text style={s.secondaryActionBtnTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>Schlussrechnung</Text>
-                </Pressable>
-              </View>
-
-              <Pressable
-                style={s.reloadBtn}
-                onPress={() => void load()}
-                disabled={busy}
-              >
-                <Text style={s.reloadBtnTxt}>
-                  {busy ? "Lädt..." : "Liste neu laden"}
-                </Text>
-              </Pressable>
-
-              <TextInput
-                value={q}
-                onChangeText={setQ}
-                placeholder="Suchen (Nr., Kunde, Datum, Quelle)…"
-                placeholderTextColor={COLORS.sub}
-                style={s.search}
-                autoCorrect={false}
-                autoCapitalize="none"
-              />
+              <TextInput value={q} onChangeText={setQ} placeholder="Rechnung oder Kunde suchen" placeholderTextColor={COLORS.sub} style={s.search} autoCorrect={false} />
 
               <View style={s.summaryRow}>
-                <Metric label="Rechnungen" value={String(filtered.length)} />
-                <Metric label="Brutto gesamt" value={`${money(totalBrutto)} €`} />
-                <Metric label="Abschläge" value={`${money(totalBezahlt)} €`} />
+                <Summary label="Brutto" value={`${money(totals.total)} €`} />
+                <Summary label="Abschläge" value={`${money(totals.paid)} €`} />
+                <Summary label="Offen" value={`${money(totals.open)} €`} strong />
               </View>
-
-              <View style={[s.summaryRow, { marginTop: 10 }]}>
-                <Metric label="Offener Rest" value={`${money(totalRest)} €`} />
-              </View>
-
-              <Text style={s.sectionTitle}>
-                {filtered.length
-                  ? `Rechnungen (${filtered.length})`
-                  : "Keine Rechnungen"}
-              </Text>
             </View>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const netto = calcNetto(item.rows || []);
-          const brutto = calcBrutto(item);
-          const bezahlt = calcAbschlagSum(item);
-          const rest = calcRest(item);
-          const abschlagCount = item.abschlaege?.length || 0;
-          const source = sourceBadgeStyle(item.sourceType);
+            <Text style={s.sectionTitle}>{busy ? "Wird geladen…" : `${filtered.length} Rechnung${filtered.length === 1 ? "" : "en"}`}</Text>
+          </View>} renderItem={({
+      item
+    }) => {
+      const total = calcBrutto(item);
+      const paid = calcAbschlagSum(item);
+      const open = Math.max(0, total - paid);
+      const abschlaege = item.abschlaege || [];
+      return <View style={s.card}>
+              <View style={s.cardHead}>
+                <Pressable style={s._inline2} onPress={() => navigation.navigate("RechnungEditor", {
+            projectId,
+            projectCode,
+            title: "Rechnung",
+            rechnungId: item.id
+          })}>
+                  <Text style={s.cardNr}>{item.rechnungNr || "Ohne Nummer"}</Text>
+                  <Text style={s.cardTitle}>{item.customerName || "Kunde nicht eingetragen"}</Text>
+                  <Text style={s.cardMeta}>{item.datum || "Kein Datum"} · {item.rows?.length || 0} Positionen</Text>
+                </Pressable>
+                <Pressable style={s.moreBtn} onPress={() => showMore(item)}><Text style={s.moreTxt}>•••</Text></Pressable>
+              </View>
 
-          return (
-            <View style={s.card}>
-              <View style={s.cardTop}>
-                <View style={s.cardTextWrap}>
-                  <Text style={s.cardNr}>{item.rechnungNr || "—"}</Text>
-                  <Text style={s.cardTitle}>
-                    {item.customerName?.trim() || "Ohne Kunde"}
-                  </Text>
-
-                  <View
-                    style={[
-                      s.sourceBadge,
-                      { backgroundColor: source.bg, borderColor: source.border },
-                    ]}
-                  >
-                    <Text style={[s.sourceBadgeTxt, { color: source.text }]}>
-                      {sourceLabel(item)}
-                    </Text>
-                  </View>
-
-                  <Text style={s.cardSub}>Datum: {item.datum || "—"}</Text>
-                  <Text style={s.cardSub}>
-                    Leistungszeitraum: {item.leistungszeitraum || "—"}
-                  </Text>
-                </View>
+              <View style={s.amountRow}>
+                <Amount label="Rechnung" value={total} />
+                <Amount label="Bezahlt" value={paid} />
+                <Amount label="Offen" value={open} strong />
               </View>
 
               <View style={s.divider} />
-
-              <View style={s.metrics}>
-                <Metric label="Positionen" value={String(item.rows?.length || 0)} />
-                <Metric label="Netto" value={`${money(netto)} €`} />
-                <Metric label="Brutto" value={`${money(brutto)} €`} />
-              </View>
-
-              <View style={[s.metrics, { marginTop: 10 }]}>
-                <Metric label="Abschläge" value={String(abschlagCount)} />
-                <Metric label="Bereits fakturiert" value={`${money(bezahlt)} €`} />
-                <Metric label="Rest" value={`${money(rest)} €`} />
-              </View>
-
-              {abschlagCount > 0 ? (
-                <View style={s.abschlagPreviewBox}>
-                  <Text style={s.abschlagPreviewTitle}>Letzter Abschlag</Text>
-                  <Text style={s.abschlagPreviewText}>
-                    Nr. {item.abschlaege?.[abschlagCount - 1]?.nummer || "—"} ·{" "}
-                    {item.abschlaege?.[abschlagCount - 1]?.datum || "—"} ·{" "}
-                    {money(item.abschlaege?.[abschlagCount - 1]?.betrag || 0)} €
-                  </Text>
-                </View>
-              ) : null}
-
-              <View style={s.actionRow}>
-                <Pressable
-                  style={[s.actionBtn, s.editBtn]}
-                  onPress={() =>
-                    navigation.navigate("RechnungEditor", {
-                      projectId,
-                      projectCode,
-                      title: "Rechnung",
-                      rechnungId: item.id,
-                    })
-                  }
-                >
-                  <Text style={s.editBtnTxt}>Bearbeiten</Text>
-                </Pressable>
-
-                <Pressable
-                  style={[s.actionBtn, s.abschlagBtn]}
-                  onPress={() =>
-                    navigation.navigate("RechnungEditor", {
-                      projectId,
-                      projectCode,
-                      title: "Rechnung",
-                      rechnungId: item.id,
-                    })
-                  }
-                >
-                  <Text style={s.abschlagBtnTxt}>Abschläge</Text>
+              <View style={s.abschlagHead}>
+                <Text style={s.abschlagTitle}>Abschläge ({abschlaege.length})</Text>
+                <Pressable style={s.addAbschlagBtn} onPress={() => navigation.navigate("AbschlagEditor", {
+            projectId,
+            projectCode,
+            title: "Neuer Abschlag",
+            rechnungId: item.id
+          })}>
+                  <Text style={s.addAbschlagTxt}>+ Neuer Abschlag</Text>
                 </Pressable>
               </View>
 
-              <View style={s.actionRow}>
-                <Pressable
-                  style={[s.actionBtn, s.openBtn]}
-                  onPress={() =>
-                    navigation.navigate("RechnungEditor", {
-                      projectId,
-                      projectCode,
-                      title: "Rechnung",
-                      rechnungId: item.id,
-                    })
-                  }
-                >
-                  <Text style={s.openBtnTxt}>Rechnung öffnen</Text>
-                </Pressable>
+              {abschlaege.length === 0 ? <Text style={s.emptyInline}>Noch kein Abschlag zu dieser Rechnung.</Text> : abschlaege.map(a => <Pressable key={a.id} style={s.abschlagRow} onPress={() => navigation.navigate("AbschlagEditor", {
+          projectId,
+          projectCode,
+          title: `${a.nummer}. Abschlagsrechnung`,
+          rechnungId: item.id,
+          abschlagNr: a.nummer,
+          inboxSnapshot: {
+            ...a,
+            rechnungId: item.id,
+            rechnungNr: item.rechnungNr
+          }
+        })}>
+                  <View style={s._inline3}>
+                    <Text style={s.abschlagNr}>{a.nummer}. Abschlagsrechnung</Text>
+                    <Text style={s.abschlagMeta}>{a.datum || "Kein Datum"}{a.prozent ? ` · ${a.prozent.toLocaleString("de-DE")} %` : ""}</Text>
+                  </View>
+                  <Text style={s.abschlagAmount}>{money(a.betrag)} €</Text>
+                  <Text style={s.chevron}>›</Text>
+                </Pressable>)}
 
-                <Pressable
-                  style={[s.actionBtn, s.schlussBtn]}
-                  onPress={() =>
-                    navigation.navigate("Schlussrechnung", {
-                      projectId,
-                      projectCode,
-                      title: "Schlussrechnung",
-                      rechnungId: item.id,
-                    } as any)
-                  }
-                >
-                  <Text style={s.schlussBtnTxt} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72}>Schlussrechnung</Text>
-                </Pressable>
-              </View>
-
-              <View style={s.actionRow}>
-                <Pressable
-                  style={[s.actionBtn, s.deleteBtn]}
-                  onPress={() => confirmDelete(item.id)}
-                >
-                  <Text style={s.deleteBtnTxt}>Löschen</Text>
-                </Pressable>
-              </View>
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={s.emptyWrap}>
-            <Text style={s.emptyText}>
-              {q.trim()
-                ? "Keine passenden Rechnungen gefunden."
-                : "Noch keine Rechnungen vorhanden."}
-            </Text>
-          </View>
-        }
-      />
-    </SafeAreaView>
-  );
+              <Pressable style={s.openInvoiceBtn} onPress={() => navigation.navigate("RechnungEditor", {
+          projectId,
+          projectCode,
+          title: "Rechnung",
+          rechnungId: item.id
+        })}>
+                <Text style={s.openInvoiceTxt}>Rechnung öffnen</Text>
+              </Pressable>
+            </View>;
+    }} ListEmptyComponent={<View style={s.emptyBox}><Text style={s.emptyTitle}>Keine Rechnungen vorhanden</Text><Text style={s.emptySub}>Erstelle zuerst eine Rechnung. Abschläge werden anschließend direkt darunter verwaltet.</Text></View>} />
+    </SafeAreaView>;
 }
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={s.metricBox}>
-      <Text style={s.metricLabel}>{label}</Text>
-      <Text style={s.metricValue}>{value}</Text>
-    </View>
-  );
+function Summary({
+  label,
+  value,
+  strong
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return <View style={s.summary}><Text style={s.summaryLabel}>{label}</Text><Text style={[s.summaryValue, strong && s.strong]} numberOfLines={1}>{value}</Text></View>;
 }
-
-const s = StyleSheet.create({
+function Amount({
+  label,
+  value,
+  strong
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+}) {
+  return <View style={s.amount}><Text style={s.amountLabel}>{label}</Text><Text style={[s.amountValue, strong && s.strong]} numberOfLines={1}>{money(value)} €</Text></View>;
+}
+const s = createRlcStyles("RechnungListScreen", {
   safe: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   wrap: {
-    padding: 16,
-    paddingBottom: 30,
-    backgroundColor: COLORS.bg,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 28
   },
-
-  hero: {
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 14,
+  headerCard: {
+    backgroundColor: "transparent",
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingVertical: 10
   },
-
-  heroTop: {
+  headerLine: {
     flexDirection: "row",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-
-  kiBtn: { display: "none",
-    minHeight: 42,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
     alignItems: "center",
-    justifyContent: "center",
+    gap: 10
   },
-
-  kiBtnTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 13,
-  },
-
-  eyebrow: {
-    color: COLORS.accentDark,
-    fontSize: 12,
-    fontWeight: "900",
-    letterSpacing: 0.3,
-  },
-
   title: {
-    marginTop: 8,
-    fontSize: 30,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontSize: 20,
+    lineHeight: 24,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   sub: {
-    marginTop: 8,
-    color: COLORS.sub,
-    fontWeight: "700",
-    lineHeight: 20,
-  },
-
-  badgeRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 14,
-  },
-
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
-  },
-
-  badgeTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
+    marginTop: 2,
     fontSize: 12,
+    color: COLORS.sub
   },
-
-  panel: {
-    marginBottom: 14,
-    borderRadius: 20,
-    padding: 15,
-    backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.text,
-        shadowOpacity: 0.06,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
-      },
-      android: { elevation: 2 },
-      default: {},
-    }),
-  },
-
-  primaryBtn: {
-    minHeight: 48,
-    borderRadius: 14,
+  newBtn: {
+    minHeight: 38,
+    paddingHorizontal: 16,
+    borderRadius: 9,
     backgroundColor: COLORS.accent,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
+    justifyContent: "center"
   },
-
-  primaryBtnTxt: {
-    color: COLORS.textLight,
-    fontWeight: "900",
-    fontSize: 15,
-  },
-
-  dualRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
-
-  secondaryActionBtn: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-  },
-
-  secondaryActionBtnTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-  },
-
-  reloadBtn: {
-    minHeight: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14,
-    marginTop: 10,
-  },
-
-  reloadBtnTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-  },
-
-  search: {
-    marginTop: 12,
-    minHeight: 46,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.inputBg,
-    color: COLORS.text,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  newBtnTxt: {
+    color: COLORS.card,
     fontWeight: "700",
+    fontSize: 13
   },
-
+  search: {
+    marginTop: 10,
+    minHeight: 40,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+    paddingHorizontal: 12,
+    color: COLORS.text,
+    fontSize: 13
+  },
   summaryRow: {
+    marginTop: 10,
     flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
+    gap: 7
   },
-
+  summary: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 7,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.primaryBorder
+  },
+  summaryLabel: {
+    color: COLORS.sub,
+    fontSize: 10,
+    fontWeight: "600"
+  },
+  summaryValue: {
+    marginTop: 3,
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  strong: {
+    color: COLORS.accent,
+    fontWeight: "700"
+  },
   sectionTitle: {
     marginTop: 14,
-    fontWeight: "900",
-    color: COLORS.text,
-    fontSize: 16,
+    marginBottom: 7,
+    color: COLORS.sub,
+    fontSize: 12,
+    fontWeight: "600"
   },
-
   card: {
-    marginBottom: 14,
-    borderRadius: 20,
-    padding: 15,
     backgroundColor: COLORS.card,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.text,
-        shadowOpacity: 0.06,
-        shadowRadius: 10,
-        shadowOffset: { width: 0, height: 6 },
-      },
-      android: { elevation: 2 },
-      default: {},
-    }),
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingVertical: 14,
+    paddingHorizontal: 2
   },
-
-  cardTop: {
+  cardHead: {
     flexDirection: "row",
     alignItems: "flex-start",
+    gap: 8
   },
-
-  cardTextWrap: {
-    flex: 1,
-  },
-
   cardNr: {
-    color: COLORS.accentDark,
-    fontWeight: "900",
-    fontSize: 13,
+    color: COLORS.accent,
+    fontSize: 12,
+    fontWeight: "700"
   },
-
   cardTitle: {
-    marginTop: 6,
+    marginTop: 2,
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 22,
+    fontSize: 16,
+    fontWeight: "600"
   },
-
-  sourceBadge: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-    minHeight: 30,
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
+  cardMeta: {
+    marginTop: 3,
+    color: COLORS.sub,
+    fontSize: 11
+  },
+  moreBtn: {
+    width: 38,
+    height: 34,
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card2
   },
-
-  sourceBadgeTxt: {
-    fontWeight: "900",
-    fontSize: 12,
-  },
-
-  cardSub: {
-    marginTop: 6,
-    color: COLORS.sub,
+  moreTxt: {
+    color: COLORS.text,
+    fontSize: 14,
     fontWeight: "700",
-    lineHeight: 18,
+    letterSpacing: 1
   },
-
+  amountRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    gap: 6
+  },
+  amount: {
+    flex: 1,
+    minWidth: 0
+  },
+  amountLabel: {
+    color: COLORS.sub,
+    fontSize: 10
+  },
+  amountValue: {
+    marginTop: 2,
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: "600"
+  },
   divider: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginVertical: 12,
+    marginVertical: 11
   },
-
-  metrics: {
+  abschlagHead: {
     flexDirection: "row",
-    gap: 10,
-  },
-
-  metricBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card2,
-    borderRadius: 14,
-    padding: 10,
-  },
-
-  metricLabel: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: COLORS.sub,
-  },
-
-  metricValue: {
-    marginTop: 4,
-    fontSize: 14,
-    fontWeight: "900",
-    color: COLORS.text,
-  },
-
-  abschlagPreviewBox: {
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    padding: 10,
-    backgroundColor: COLORS.card2,
-  },
-
-  abschlagPreviewTitle: {
-    color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 13,
-  },
-
-  abschlagPreviewText: {
-    color: COLORS.sub,
-    fontWeight: "700",
-    marginTop: 4,
-    lineHeight: 18,
-  },
-
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
-  },
-
-  actionBtn: {
-    flex: 1,
-    minHeight: 46,
-    borderRadius: 14,
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 12,
-    borderWidth: 1,
+    gap: 8,
+    marginBottom: 6
   },
-
-  editBtn: {
-    backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
-  },
-
-  editBtnTxt: {
-    color: COLORS.textLight,
-    fontWeight: "900",
-  },
-
-  abschlagBtn: {
-    backgroundColor: COLORS.warning,
-    borderColor: COLORS.warning,
-  },
-
-  abschlagBtnTxt: {
-    color: COLORS.textLight,
-    fontWeight: "900",
-  },
-
-  openBtn: {
-    backgroundColor: COLORS.accentDark,
-    borderColor: COLORS.accentDark,
-  },
-
-  openBtnTxt: {
-    color: COLORS.textLight,
-    fontWeight: "900",
-  },
-
-  schlussBtn: {
-    backgroundColor: COLORS.success,
-    borderColor: COLORS.success,
-  },
-
-  schlussBtnTxt: {
-    color: COLORS.textLight,
-    fontWeight: "900",
-    fontSize: 13,
-    textAlign: "center",
-  },
-
-  deleteBtn: {
-    backgroundColor: COLORS.card2,
-    borderColor: COLORS.border,
-  },
-
-  deleteBtnTxt: {
+  abschlagTitle: {
+    flex: 1,
     color: COLORS.text,
-    fontWeight: "900",
+    fontSize: 13,
+    fontWeight: "700"
   },
-
-  emptyWrap: {
-    paddingTop: 28,
-    paddingHorizontal: 16,
+  addAbschlagBtn: {
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center"
   },
-
-  emptyText: {
+  addAbschlagTxt: {
+    color: COLORS.accent,
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  emptyInline: {
+    paddingVertical: 9,
     color: COLORS.sub,
-    textAlign: "center",
-    fontWeight: "800",
-    lineHeight: 20,
+    fontSize: 12
   },
-
-  disabled: {
-    opacity: 0.55,
+  abschlagRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border
   },
+  abschlagNr: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  abschlagMeta: {
+    marginTop: 2,
+    color: COLORS.sub,
+    fontSize: 10
+  },
+  abschlagAmount: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  chevron: {
+    color: COLORS.sub,
+    fontSize: 22,
+    lineHeight: 22
+  },
+  openInvoiceBtn: {
+    marginTop: 10,
+    minHeight: 38,
+    borderRadius: 9,
+    backgroundColor: COLORS.accent,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  openInvoiceTxt: {
+    color: COLORS.card,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  emptyBox: {
+    marginTop: 12,
+    paddingVertical: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    alignItems: "center"
+  },
+  emptyTitle: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+  emptySub: {
+    marginTop: 6,
+    color: COLORS.sub,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center"
+  },
+  _inline1: {
+    flex: 1
+  },
+  _inline2: {
+    flex: 1
+  },
+  _inline3: {
+    flex: 1
+  }
 });
-
-
-
-
-
-
-
-
-
-
-

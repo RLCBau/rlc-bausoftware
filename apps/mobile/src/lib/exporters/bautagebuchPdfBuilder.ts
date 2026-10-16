@@ -1,12 +1,14 @@
-﻿// apps/mobile/src/lib/exporters/bautagebuchPdfBuilder.ts
+import { buildDocumentPdf, type PdfRow } from "./documentPdfBuilder";
+// apps/mobile/src/lib/exporters/bautagebuchPdfBuilder.ts
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Linking } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import {
-  getCompanyHeaderCached,
-  getCompanyLogoUriCached,
-} from "../companyCache";
+  RLC_PDF_FONT_STACK,
+  loadRlcPdfBranding,
+  renderRlcPdfCompanyHeader,
+} from "./pdfBranding";
 
 export type BautagebuchRow = {
   id: string;
@@ -105,38 +107,17 @@ async function logoUriToDataUri(uri?: string | null): Promise<string> {
 }
 
 function buildCoverHtml(params: {
-  companyName: string;
-  companyLine: string;
-  logoDataUri?: string;
+  companyHeaderHtml: string;
   projectTitle: string;
   projectFsKey: string;
   monthLabel?: string;
   rowCount: number;
 }) {
-  const {
-    companyName,
-    companyLine,
-    logoDataUri,
-    projectTitle,
-    projectFsKey,
-    monthLabel,
-    rowCount,
-  } = params;
+  const { companyHeaderHtml, projectTitle, projectFsKey, monthLabel, rowCount } = params;
 
   return `
     <section class="cover page-break">
-      <div class="cover-top">
-        ${
-          logoDataUri
-            ? `<img class="logo" src="${logoDataUri}" alt="logo" />`
-            : `<div class="logo-placeholder"></div>`
-        }
-        <div class="company-box">
-          <div class="company-name">${esc(companyName)}</div>
-          <div class="company-line">${esc(companyLine || "")}</div>
-        </div>
-      </div>
-
+      <div class="page-company-header">${companyHeaderHtml}</div>
       <div class="cover-main">
         <div class="cover-kicker">Baustellendokumentation</div>
         <h1>Bautagebuch</h1>
@@ -168,11 +149,12 @@ function buildCoverHtml(params: {
   `;
 }
 
-function buildDayHtml(row: BautagebuchRow, idx: number) {
+function buildDayHtml(row: BautagebuchRow, idx: number, companyHeaderHtml: string) {
   const weatherLine = [row.weather, row.temperature].filter(Boolean).join(" • ");
 
   return `
     <section class="day page-break">
+      <div class="page-company-header">${companyHeaderHtml}</div>
       <div class="day-head">
         <div>
           <div class="day-kicker">Tagesbericht ${idx + 1}</div>
@@ -227,26 +209,23 @@ function buildDayHtml(row: BautagebuchRow, idx: number) {
 
 function buildHtml(params: {
   companyName: string;
-  companyLine: string;
-  logoDataUri?: string;
+  companyHeaderHtml: string;
   projectTitle: string;
   projectFsKey: string;
   monthLabel?: string;
   rows: BautagebuchRow[];
 }) {
-  const { companyName, companyLine, logoDataUri, projectTitle, projectFsKey, monthLabel, rows } = params;
+  const { companyName, companyHeaderHtml, projectTitle, projectFsKey, monthLabel, rows } = params;
 
   const cover = buildCoverHtml({
-    companyName,
-    companyLine,
-    logoDataUri,
+    companyHeaderHtml,
     projectTitle,
     projectFsKey,
     monthLabel,
     rowCount: rows.length,
   });
 
-  const days = rows.map((r, i) => buildDayHtml(r, i)).join("");
+  const days = rows.map((r, i) => buildDayHtml(r, i, companyHeaderHtml)).join("");
 
   return `
   <!DOCTYPE html>
@@ -257,11 +236,11 @@ function buildHtml(params: {
       <style>
         @page {
           size: A4;
-          margin: 22mm 16mm 18mm 16mm;
+          margin: 14mm 16mm 18mm 16mm;
         }
 
         body {
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+          font-family: ${RLC_PDF_FONT_STACK};
           color: #0B1720;
           font-size: 12px;
           line-height: 1.45;
@@ -274,6 +253,32 @@ function buildHtml(params: {
         .page-break:last-child {
           page-break-after: auto;
         }
+
+        .page-company-header {
+          width: 100%;
+          margin: 0 0 10px 0;
+          page-break-inside: avoid;
+        }
+
+        .page-company-header > div {
+          width: 100%;
+          margin: 0 !important;
+        }
+
+        .global-footer {
+          position: fixed;
+          left: 0;
+          right: 0;
+          bottom: -12mm;
+          display: flex;
+          justify-content: space-between;
+          border-top: 1px solid #DDE7EF;
+          padding-top: 4px;
+          color: #64748B;
+          font-size: 8px;
+        }
+
+        .page-number::after { content: counter(page); }
 
         .cover-top {
           display: flex;
@@ -314,7 +319,7 @@ function buildHtml(params: {
         }
 
         .cover-main {
-          padding-top: 44px;
+          padding-top: 18px;
         }
 
         .cover-kicker {
@@ -450,6 +455,10 @@ function buildHtml(params: {
       </style>
     </head>
     <body>
+      <div class="global-footer">
+        <span>${esc(companyName || "RLC Bausoftware")} · ${esc(projectFsKey)}</span>
+        <span>Seite <span class="page-number"></span></span>
+      </div>
       ${cover}
       ${days}
     </body>
@@ -461,59 +470,106 @@ export async function buildBautagebuchPdf(
   input: BuildBautagebuchPdfInput
 ): Promise<BuildBautagebuchPdfResult> {
   const rows = sortRows(Array.isArray(input.rows) ? input.rows : []);
+
   if (!rows.length) {
-    throw new Error("Keine Tagesberichte für den PDF-Export gefunden.");
+    throw new Error(
+      "Keine Tagesberichte für den PDF-Export gefunden."
+    );
   }
 
   const date = ymdNow();
 
-  const companyHeader = await getCompanyHeaderCached().catch(() => null);
-  const logoUri = await getCompanyLogoUriCached().catch(() => null);
-  const logoDataUri = await logoUriToDataUri(logoUri);
-
-  const companyName =
+  const projectTitle =
     String(
-      companyHeader?.name ||
-        companyHeader?.companyName ||
-        companyHeader?.title ||
-        companyHeader?.firma ||
-        companyHeader?.company ||
-        "RLC Bausoftware"
-    ).trim() || "RLC Bausoftware";
+      input.projectTitle ||
+      input.projectFsKey ||
+      "Projekt"
+    ).trim() || "Projekt";
 
-  const companyLine = [
-    companyHeader?.address || companyHeader?.fullAddress || companyHeader?.anschrift || "",
-    companyHeader?.phone || companyHeader?.telefon || companyHeader?.tel || "",
-    companyHeader?.email || companyHeader?.mail || "",
-  ]
-    .map((x) => String(x || "").trim())
-    .filter(Boolean)
-    .join(" • ");
+  const pdfRows: PdfRow[] = [];
 
-  const projectTitle = String(input.projectTitle || "Projekt").trim() || "Projekt";
+  rows.forEach((row, index) => {
+    const dateLabel = formatDateDe(row.date);
+
+    pdfRows.push({
+      pos: String(index + 1),
+      text: `Tagesbericht ${dateLabel}`,
+      unit: "",
+      qty: 0,
+      ep: 0,
+      gp: 0,
+      formula: "",
+    });
+
+    const details = [
+      ["Wetter", row.weather],
+      ["Temperatur", row.temperature],
+      ["Mitarbeiter", row.workers],
+      ["Maschinen", row.machines],
+      ["Ausgeführte Arbeiten", row.workDone],
+      ["Besondere Vorkommnisse", row.issues],
+      ["Zusätzliche Notizen", row.notes],
+    ].filter((entry) =>
+      String(entry[1] || "").trim()
+    );
+
+    details.forEach(([label, value]) => {
+      pdfRows.push({
+        pos: "",
+        text: `${label}: ${String(value || "").trim()}`,
+        unit: "",
+        qty: 0,
+        ep: 0,
+        gp: 0,
+        formula: "",
+      });
+    });
+
+    const attachmentCount =
+      Array.isArray(row.attachments)
+        ? row.attachments.length
+        : 0;
+
+    if (attachmentCount > 0) {
+      pdfRows.push({
+        pos: "",
+        text: `Fotos / Anhänge: ${attachmentCount}`,
+        unit: "",
+        qty: 0,
+        ep: 0,
+        gp: 0,
+        formula: "",
+      });
+    }
+  });
+
   const fileName =
     fileNameSafe(
       input.filenameHint ||
-        `Bautagebuch_${input.projectFsKey}_${input.monthLabel || date}`
+      `Bautagebuch_${input.projectFsKey}_${
+        input.monthLabel || date
+      }`
     ) + ".pdf";
 
-  const html = buildHtml({
-    companyName,
-    companyLine,
-    logoDataUri,
-    projectTitle,
-    projectFsKey: String(input.projectFsKey || "").trim(),
-    monthLabel: String(input.monthLabel || "").trim() || undefined,
-    rows,
-  });
-
-  const out = await Print.printToFileAsync({
-    html,
-    base64: false,
+  const result = await buildDocumentPdf({
+    type: "BAUTAGEBUCH",
+    projectCode: String(
+      input.projectFsKey || ""
+    ).trim(),
+    fileName,
+    title: "Bautagebuch",
+    subTitle: input.monthLabel ? `Zeitraum: ${String(input.monthLabel)}` : "",
+    date,
+    customer: {
+      name: projectTitle,
+    },
+    rows: pdfRows,
+    note: `${rows.length} Tagesbericht(e)`,
+    shareAfterCreate: false,
   });
 
   return {
-    pdfUri: out.uri,
+    pdfUri: result.pdfUri,
     fileName,
     date,
   };
@@ -528,5 +584,3 @@ export async function openBautagebuchPdf(result: any) {
 
   await Linking.openURL(uri);
 }
-
-

@@ -1,6 +1,5 @@
 ﻿// apps/mobile/src/lib/offlineQueue.ts
 import { getJson, setJson, uid } from "./storage";
-import { getAuthMode, getAuthState } from "./auth";
 
 /** ===== Web-Align Types (aus ManuellFoto.tsx) ===== */
 export type DetectBox = {
@@ -173,31 +172,24 @@ export type QueueItem =
         // esteso
         row?: any;
       };
+    })
+  | (QueueItemBase & {
+      kind:
+        | "BAUTAGEBUCH"
+        | "ANGEBOT"
+        | "MENGENERMITTLUNG"
+        | "ABSCHLAGSRECHNUNG"
+        | "RECHNUNG"
+        | "KALKULATION"
+        | "OUTLIER_REPORT";
+      payload: {
+        row?: any;
+        [key: string]: any;
+      };
     });
 
-// Legacy data remains stored under rlc.queue.v2 for controlled recovery.
-
-// Server queues belong to a specific authenticated identity. Legacy data is
-// retained in-place for manual recovery, never silently adopted by a new user.
-async function queueKey(): Promise<string> {
-  const mode = await getAuthMode();
-  if (mode === "NUR_APP") {
-    const localState = await getAuthState("NUR_APP");
-    const localIdentity = String(localState?.email || "").trim().toLowerCase();
-    if (!localIdentity) throw new Error("QUEUE_LOCAL_IDENTITY_REQUIRED");
-    // Never expose an older global queue to a newly signed-in local user.
-    return `rlc.queue.v3:NUR_APP:${encodeURIComponent(localIdentity)}`;
-  }
-  const state = await getAuthState("SERVER_SYNC");
-  const identity = String(state?.userId || state?.email || "").trim().toLowerCase();
-  if (!identity) throw new Error("QUEUE_AUTH_REQUIRED");
-  const company = String(state?.companyId || "").trim().toLowerCase();
-  if (!company) throw new Error("QUEUE_COMPANY_REQUIRED");
-  return `rlc.queue.v3:SERVER_SYNC:${encodeURIComponent(company)}:${encodeURIComponent(identity)}`;
-}
-async function lockKey(): Promise<string> {
-  return `${await queueKey()}.lock`;
-}
+const KEY = "rlc.queue.v2";
+const LOCK_KEY = "rlc.queue.v2.lock";
 
 /** ============================================================
  * Small helpers
@@ -285,14 +277,14 @@ function isOfflineLikeMessage(msgLower: string) {
 
 async function clearLock() {
   try {
-    await setJson(await lockKey(), null as any);
+    await setJson(LOCK_KEY, null as any);
   } catch {
     // ignore
   }
 }
 
 async function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const lock = await getJson<{ at: number; id: string } | null>(await lockKey(), null);
+  const lock = await getJson<{ at: number; id: string } | null>(LOCK_KEY, null);
   const t = nowMs();
 
   // lock stale dopo 60s
@@ -301,12 +293,12 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
   }
 
   const lockId = uid("qlock");
-  await setJson(await lockKey(), { at: t, id: lockId });
+  await setJson(LOCK_KEY, { at: t, id: lockId });
 
   try {
     return await fn();
   } finally {
-    const cur = await getJson<{ at: number; id: string } | null>(await lockKey(), null);
+    const cur = await getJson<{ at: number; id: string } | null>(LOCK_KEY, null);
     if (cur?.id === lockId) {
       await clearLock();
     }
@@ -317,47 +309,8 @@ async function withLock<T>(fn: () => Promise<T>): Promise<T> {
  * Public API
  * ============================================================ */
 
-export async function queueLegacyRecoveryPreview(): Promise<{ total: number; projects: string[] }> {
-  // Metadata only: legacy payloads may contain personal or financial information.
-  const rows = await getJson<QueueItem[]>("rlc.queue.v2", []);
-  if (!Array.isArray(rows)) return { total: 0, projects: [] };
-  return {
-    total: rows.length,
-    projects: [...new Set(rows.map(x => String(x?.projectId || "").trim()).filter(Boolean))],
-  };
-}
-
-/**
- * Explicit recovery: caller must show the project list, verify the owner and
- * receive confirmation from the signed-in user. Never delete the legacy copy.
- * Refuse recovery if any legacy project is outside the active company.
- */
-export async function queueRecoverLegacy(
-  confirmedProjectIds: string[],
-  serverAuthorizedProjectIds: string[]
-): Promise<{ imported: number; retained: number }> {
-  if ((await getAuthMode()) !== "SERVER_SYNC") throw new Error("RECOVERY_SERVER_LOGIN_REQUIRED");
-  const state = await getAuthState("SERVER_SYNC");
-  if (!state?.companyId || !(state.userId || state.email)) throw new Error("RECOVERY_IDENTITY_REQUIRED");
-  const rows = await getJson<QueueItem[]>("rlc.queue.v2", []);
-  if (!Array.isArray(rows) || !rows.length) return { imported: 0, retained: 0 };
-  const approved = new Set(confirmedProjectIds.map(x => String(x).trim()));
-  const authorized = new Set(serverAuthorizedProjectIds.map(x => String(x).trim()));
-  if (!rows.every(x => approved.has(String(x?.projectId || "").trim()) && authorized.has(String(x?.projectId || "").trim()))) {
-    throw new Error("RECOVERY_PROJECT_OWNERSHIP_NOT_CONFIRMED");
-  }
-  const key = await queueKey();
-  const existing = await getJson<QueueItem[]>(key, []);
-  const target = Array.isArray(existing) ? existing : [];
-  const seen = new Set(target.map(x => String(x.id)));
-  const toImport = rows.filter(x => x?.id && !seen.has(String(x.id)));
-  await setJson(key, [...target, ...toImport]);
-  return { imported: toImport.length, retained: rows.length };
-}
-
-
 export async function queueList(): Promise<QueueItem[]> {
-  const list = await getJson<QueueItem[]>(await queueKey(), []);
+  const list = await getJson<QueueItem[]>(KEY, []);
   return Array.isArray(list) ? list : [];
 }
 
@@ -445,23 +398,23 @@ export async function queueAdd(
   };
 
   list.unshift(full);
-  await setJson(await queueKey(), list);
+  await setJson(KEY, list);
   return full;
 }
 
 export async function queueUpdate(id: string, patch: Partial<QueueItem>) {
   const list = await queueList();
   const next = list.map((x) => (x.id === id ? ({ ...x, ...patch } as any) : x));
-  await setJson(await queueKey(), next);
+  await setJson(KEY, next);
 }
 
 export async function queueRemove(id: string) {
   const list = await queueList();
-  await setJson(await queueKey(), list.filter((x) => x.id !== id));
+  await setJson(KEY, list.filter((x) => x.id !== id));
 }
 
 export async function queueClearAll() {
-  await setJson(await queueKey(), []);
+  await setJson(KEY, []);
   await clearLock();
 }
 
@@ -494,13 +447,13 @@ export async function queueRetryAll(projectId?: string) {
     if (key && x.projectId !== key) return x;
     return { ...x, status: "PENDING", error: undefined, nextTryAt: null } as any;
   });
-  await setJson(await queueKey(), next);
+  await setJson(KEY, next);
 }
 
 export async function queueCleanupDone() {
   const list = await queueList();
   const next = list.filter((x) => x.status !== "DONE");
-  await setJson(await queueKey(), next);
+  await setJson(KEY, next);
 }
 
 /**
@@ -546,7 +499,7 @@ export async function queueNormalizeExisting(): Promise<{ changed: number }> {
     return y as QueueItem;
   });
 
-  if (changed > 0) await setJson(await queueKey(), next);
+  if (changed > 0) await setJson(KEY, next);
   return { changed };
 }
 
@@ -715,7 +668,7 @@ export async function queueFlushProject(
  * ✅ Helper: check lock (per evitare doppio tap)
  */
 export async function queueIsLocked(): Promise<boolean> {
-  const lock = await getJson<{ at: number; id: string } | null>(await lockKey(), null);
+  const lock = await getJson<{ at: number; id: string } | null>(LOCK_KEY, null);
   if (!lock) return false;
   return nowMs() - lock.at < 60000;
 }

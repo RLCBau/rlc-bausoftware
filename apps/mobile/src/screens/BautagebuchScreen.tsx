@@ -1,38 +1,27 @@
-﻿// apps/mobile/src/screens/BautagebuchScreen.tsx
+// apps/mobile/src/screens/BautagebuchScreen.tsx
 import React, { useLayoutEffect, useState } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  Alert,
-  Platform,
-  ActivityIndicator,
-  Linking,
-} from "react-native";
+import { View, Text, Pressable, SafeAreaView, ScrollView, Alert, Platform, ActivityIndicator, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import { uploadProjectArtifactToDms } from "../lib/api";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList } from "../navigation/types";
-import { COLORS } from "../ui/theme";
-import {
-  buildBautagebuchPdf,
-  openBautagebuchPdf,
-  type BautagebuchRow,
-} from "../lib/exporters/bautagebuchPdfBuilder";
+import { COLORS, createRlcStyles } from "../ui/theme";
+import { buildBautagebuchPdf, type BautagebuchRow } from "../lib/exporters/bautagebuchPdfBuilder";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
-
 type Props = NativeStackScreenProps<RootStackParamList, "Bautagebuch">;
-
 const KEY = "rlc_tagesbericht_list:";
-
-export default function BautagebuchScreen({ route, navigation }: Props) {
-  const { projectId, projectCode, title } = route.params;
-
+export default function BautagebuchScreen({
+  route,
+  navigation
+}: Props) {
+  const {
+    projectId,
+    projectCode,
+    title
+  } = route.params;
   const projectKey = String(projectCode || projectId || "").trim();
   const [pdfBusy, setPdfBusy] = useState(false);
   const [saveBusy, setSaveBusy] = useState(false);
@@ -41,44 +30,36 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
   const [stats, setStats] = useState({
     total: 0,
     withIssues: 0,
-    withMachines: 0,
+    withMachines: 0
   });
-
   useLayoutEffect(() => {
     navigation.setOptions({
       title: "Bautagebuch",
       headerStyle: {
-        backgroundColor: COLORS.accentDark,
+        backgroundColor: COLORS.bg
       },
       headerTitleStyle: {
-        color: COLORS.card,
-        fontWeight: "800",
+        color: COLORS.text,
+        fontSize: 18,
+        fontWeight: "600"
       },
-      headerTintColor: COLORS.card,
-      headerRight: () => (
-        <Pressable
-          onPress={() => {
-            navigation.navigate("SupportChat" as any, {
-              projectId: String(projectId || ""),
-              projectCode: String(projectCode || "").trim() || undefined,
-              title: "RLC KI",
-              screen: "Bautagebuch",
-              initialMessage: "",
-            });
-          }}
-          style={[s.headerKiBtn, { display: "none" }]}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={18}
-            color={COLORS.accentDark}
-          />
+      headerTintColor: COLORS.text,
+      headerRight: () => <Pressable onPress={() => {
+        navigation.navigate("SupportChat" as any, {
+          projectId: String(projectId || ""),
+          projectCode: String(projectCode || "").trim() || undefined,
+          title: "RLC KI",
+          screen: "Bautagebuch",
+          initialMessage: ""
+        });
+      }} style={[s.headerKiBtn, {
+        display: "none"
+      }]}>
+          <Ionicons name="chatbubble-ellipses-outline" size={18} color={COLORS.accentDark} />
           <Text style={s.headerKiTxt}>RLC KI</Text>
         </Pressable>
-      ),
     });
   }, [navigation, projectId, projectCode]);
-
   async function loadTagesberichte(): Promise<BautagebuchRow[]> {
     try {
       const raw = await AsyncStorage.getItem(`${KEY}${projectKey}`);
@@ -88,78 +69,68 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
       return [];
     }
   }
-
   async function refreshStats() {
     try {
       setStatsBusy(true);
       const rows = await loadTagesberichte();
-
       const total = rows.length;
-
       const withIssues = rows.filter((r: any) => {
-        const issues = String(
-          r?.issues || r?.vorkommnisse || r?.besondereVorkommnisse || ""
-        ).trim();
+        const issues = String(r?.issues || r?.vorkommnisse || r?.besondereVorkommnisse || "").trim();
         return !!issues;
       }).length;
-
       const withMachines = rows.filter((r: any) => {
         if (Array.isArray(r?.lines) && r.lines.length) {
           return r.lines.some((x: any) => String(x?.machine || x?.maschine || "").trim());
         }
         return String(r?.machines || r?.maschine || "").trim().length > 0;
       }).length;
-
-      setStats({ total, withIssues, withMachines });
+      setStats({
+        total,
+        withIssues,
+        withMachines
+      });
     } catch {
-      setStats({ total: 0, withIssues: 0, withMachines: 0 });
+      setStats({
+        total: 0,
+        withIssues: 0,
+        withMachines: 0
+      });
     } finally {
       setStatsBusy(false);
     }
   }
-
   React.useEffect(() => {
     refreshStats();
   }, [projectKey]);
-
   const goNewTagesbericht = () => {
     navigation.navigate("TagesberichtEditor" as any, {
       projectId,
       projectCode,
-      title: title || "Tagesbericht",
+      title: title || "Tagesbericht"
     });
   };
-
   const goTagesberichte = () => {
     navigation.navigate("TagesberichtList" as any, {
       projectId,
       projectCode,
-      title: title || "Tagesberichte",
+      title: title || "Tagesberichte"
     });
   };
-
   const goBautagebuchPdf = async () => {
     try {
       setPdfBusy(true);
-
       const rows = await loadTagesberichte();
-
       if (!rows.length) {
-        Alert.alert(
-          "PDF",
-          "Für dieses Projekt sind noch keine Tagesberichte vorhanden."
-        );
+        Alert.alert("PDF", "Für dieses Projekt sind noch keine Tagesberichte vorhanden.");
         return;
       }
-
       const result = await buildBautagebuchPdf({
         projectFsKey: projectKey,
         projectTitle: String(title || "Projekt"),
         monthLabel: "Gesamt",
         rows,
-        filenameHint: `Bautagebuch_${projectKey}`,
+        filenameHint: `Bautagebuch_${projectKey}`
       });
-
       await submitToEingangPruefung({
         type: "BAUTAGEBUCH",
         projectKey,
@@ -175,29 +146,31 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
           date: new Date().toISOString().slice(0, 10),
           monthLabel: "Gesamt",
           totalReports: rows.length,
-          rows,
+          rows
         },
         pdfUri: (result as any)?.pdfUri || (result as any)?.uri || null,
         status: "EINGEREICHT",
-        sourceScreen: "Bautagebuch",
+        sourceScreen: "Bautagebuch"
       });
-
-      await openBautagebuchPdf((result as any)?.pdfUri || (result as any)?.uri || result);
+      const pdfUri = String((result as any)?.pdfUri || (result as any)?.uri || "").trim();
+      if (!pdfUri) throw new Error("PDF wurde erstellt, aber kein Dateipfad zurückgegeben.");
+      navigation.navigate("PdfViewer", {
+        uri: pdfUri,
+        title: `Bautagebuch ${projectKey}`,
+        projectId: String(projectId || projectKey),
+        projectCode: String(projectCode || projectKey),
+        documentType: "BAUTAGEBUCH"
+      });
     } catch (e: any) {
-      Alert.alert(
-        "PDF",
-        e?.message || "PDF konnte nicht erstellt werden."
-      );
+      Alert.alert("PDF", e?.message || "PDF konnte nicht erstellt werden.");
     } finally {
       setPdfBusy(false);
     }
   };
-
   const saveBautagebuch = async () => {
     try {
       setSaveBusy(true);
       const rows = await loadTagesberichte();
-
       await submitToEingangPruefung({
         type: "BAUTAGEBUCH",
         projectKey,
@@ -210,13 +183,12 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
           projectCode: projectKey,
           title: `Bautagebuch ${projectKey}`,
           rows,
-          savedAt: new Date().toISOString(),
+          savedAt: new Date().toISOString()
         },
         pdfUri: null,
         status: "EINGEREICHT",
-        sourceScreen: "Bautagebuch",
+        sourceScreen: "Bautagebuch"
       });
-
       Alert.alert("Bautagebuch", "Gespeichert und an Eingang / Prüfung übergeben.");
     } catch (e: any) {
       Alert.alert("Bautagebuch", e?.message || "Speichern fehlgeschlagen.");
@@ -224,37 +196,33 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
       setSaveBusy(false);
     }
   };
-
   const exportBautagebuchCsv = async () => {
     try {
       setCsvBusy(true);
       const rows = await loadTagesberichte();
-
       if (!rows.length) {
         Alert.alert("Bautagebuch CSV", "Für dieses Projekt sind noch keine Tagesberichte vorhanden.");
         return;
       }
-
       const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
       const header = ["Datum", "Wetter", "Arbeiten", "Personal", "Maschinen", "Probleme"].map(esc).join(";");
-
-      const body = rows.map((r: any) =>
-        [
-          r.date || r.datum || "",
-          r.weather || r.wetter || "",
-          r.workDone || r.arbeiten || "",
-          r.workers || r.personal || "",
-          r.machines || r.maschinen || "",
-          r.issues || r.probleme || "",
-        ].map(esc).join(";")
-      );
-
+      const body = rows.map((r: any) => [r.date || r.datum || "", r.weather || r.wetter || "", r.workDone || r.arbeiten || "", r.workers || r.personal || "", r.machines || r.maschinen || "", r.issues || r.probleme || ""].map(esc).join(";"));
       const csv = [header, ...body].join("\n");
       const uri = `${FileSystem.cacheDirectory}Bautagebuch_${projectKey}.csv`;
-
       await FileSystem.writeAsStringAsync(uri, csv, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: FileSystem.EncodingType.UTF8
       });
+      try {
+        await uploadProjectArtifactToDms({
+          projectIdOrCode: projectId || projectKey,
+          fileUri: uri,
+          fileName: `Bautagebuch_${projectKey}.csv`,
+          mimeType: "text/csv;charset=utf-8",
+          module: "BAUTAGEBUCH",
+        });
+      } catch (error) {
+        console.warn("[bautagebuch:csv:dms]", error);
+      }
 
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri);
@@ -267,26 +235,8 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
       setCsvBusy(false);
     }
   };
-
-  return (
-    <SafeAreaView style={s.safe}>
-      <ScrollView
-        contentContainerStyle={s.wrap}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={s.topRow}>
-          <Pressable style={s.backBtn} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={16} color={COLORS.text} />
-            <Text style={s.backTxt}>Zurück</Text>
-          </Pressable>
-
-          <View style={s.projectPill}>
-            <Text style={s.projectPillTxt} numberOfLines={1}>
-              {projectKey}
-            </Text>
-          </View>
-        </View>
-
+  return <SafeAreaView style={s.safe}>
+      <ScrollView contentContainerStyle={s.wrap} showsVerticalScrollIndicator={false}>
         <View style={s.heroCardCompact}>
           <View style={s.heroMainRow}>
             <View style={s.heroLeft}>
@@ -346,11 +296,7 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
             </View>
           </Pressable>
 
-          <Pressable
-            style={[s.actionCard, pdfBusy ? s.cardDisabled : null]}
-            onPress={goBautagebuchPdf}
-            disabled={pdfBusy}
-          >
+          <Pressable style={[s.actionCard, pdfBusy ? s.cardDisabled : null]} onPress={goBautagebuchPdf} disabled={pdfBusy}>
             <View style={s.actionIconPdf}>
               <Ionicons name="document-text-outline" size={18} color={COLORS.card} />
             </View>
@@ -358,17 +304,11 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
               <Text style={s.actionTitle}>PDF</Text>
               <Text style={s.actionSub}>PDF erzeugen</Text>
             </View>
-            {pdfBusy ? (
-              <ActivityIndicator size="small" color={COLORS.text} />
-            ) : null}
+            {pdfBusy ? <ActivityIndicator size="small" color={COLORS.text} /> : null}
           </Pressable>
 
-          <Pressable
-            style={[s.actionCard, saveBusy ? s.cardDisabled : null]}
-            onPress={saveBautagebuch}
-            disabled={saveBusy}
-          >
-            <View style={s.actionIconRefresh}>
+          <Pressable style={[s.actionCard, saveBusy ? s.cardDisabled : null]} onPress={saveBautagebuch} disabled={saveBusy}>
+            <View style={s.actionIconSave}>
               <Ionicons name="save-outline" size={18} color={COLORS.card} />
             </View>
             <View style={s.actionTextWrap}>
@@ -378,12 +318,8 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
             {saveBusy ? <ActivityIndicator size="small" color={COLORS.text} /> : null}
           </Pressable>
 
-          <Pressable
-            style={[s.actionCard, csvBusy ? s.cardDisabled : null]}
-            onPress={exportBautagebuchCsv}
-            disabled={csvBusy}
-          >
-            <View style={s.actionIconRefresh}>
+          <Pressable style={[s.actionCard, csvBusy ? s.cardDisabled : null]} onPress={exportBautagebuchCsv} disabled={csvBusy}>
+            <View style={s.actionIconCsv}>
               <Ionicons name="document-outline" size={18} color={COLORS.card} />
             </View>
             <View style={s.actionTextWrap}>
@@ -411,210 +347,154 @@ export default function BautagebuchScreen({ route, navigation }: Props) {
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
-  );
+    </SafeAreaView>;
 }
-
-const s = StyleSheet.create({
+const s = createRlcStyles("BautagebuchScreen", {
   safe: {
     flex: 1,
-    backgroundColor: COLORS.bg,
+    backgroundColor: COLORS.bg
   },
-
   wrap: {
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 28,
-    gap: 12,
+    gap: 12
   },
-
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-    marginBottom: 2,
-  },
-
-  headerKiBtn: { display: "none",
+  headerKiBtn: {
+    display: "none",
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 14,
     backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   headerKiTxt: {
     color: COLORS.accentDark,
-    fontWeight: "900",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 13
   },
-
-  backBtn: {
-    minHeight: 42,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
-
-  backTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 15,
-  },
-
-  projectPill: {
-    maxWidth: "58%",
-    minHeight: 42,
-    justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
-
-  projectPillTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 13,
-  },
-
   heroCardCompact: {
-    borderRadius: 22,
-    padding: 16,
-    backgroundColor: COLORS.card,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: COLORS.accentFaint,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.primaryBorder,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.accent,
     ...Platform.select({
       ios: {
         shadowColor: COLORS.text,
         shadowOpacity: 0.05,
         shadowRadius: 8,
-        shadowOffset: { width: 0, height: 5 },
+        shadowOffset: {
+          width: 0,
+          height: 5
+        }
       },
-      android: { elevation: 2 },
-      default: {},
-    }),
+      android: {
+        elevation: 2
+      },
+      default: {}
+    })
   },
-
   heroMainRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    gap: 10,
+    gap: 10
   },
-
   heroLeft: {
     flex: 1,
-    paddingRight: 8,
+    paddingRight: 8
   },
-
   eyebrow: {
     color: COLORS.sub,
-    fontWeight: "800",
+    fontWeight: "600",
     fontSize: 12,
-    marginBottom: 4,
+    marginBottom: 4
   },
-
   h1: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: "900",
+    fontSize: 18,
+    lineHeight: 27,
+    fontWeight: "600",
     color: COLORS.text,
-    letterSpacing: -0.3,
+    letterSpacing: -0.3
   },
-
   h2: {
     color: COLORS.sub,
-    fontWeight: "800",
+    fontWeight: "600",
     fontSize: 15,
-    marginTop: 3,
+    marginTop: 3
   },
-
   heroProject: {
     marginTop: 8,
     color: COLORS.accent,
-    fontWeight: "900",
-    fontSize: 15,
+    fontWeight: "600",
+    fontSize: 15
   },
-
   heroBadge: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: COLORS.card2,
+    borderRadius: 14,
+    backgroundColor: COLORS.accentSoft,
     borderWidth: 1,
-    borderColor: COLORS.border,
-    alignSelf: "flex-start",
+    borderColor: COLORS.primaryBorder,
+    alignSelf: "flex-start"
   },
-
   heroBadgeTxt: {
-    color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 12,
+    color: COLORS.accentDark,
+    fontWeight: "600",
+    fontSize: 12
   },
-
   heroTextCompact: {
     marginTop: 10,
     color: COLORS.sub,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 19,
-    fontSize: 14,
+    fontSize: 14
   },
-
   statsRow: {
     flexDirection: "row",
-    gap: 10,
+    gap: 10
   },
-
   statCard: {
     flex: 1,
-    minHeight: 82,
-    borderRadius: 18,
-    paddingVertical: 14,
+    minHeight: 44,
+    borderRadius: 14,
+    paddingVertical: 10,
     paddingHorizontal: 10,
     backgroundColor: COLORS.card,
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderTopWidth: 3,
+    borderTopColor: COLORS.accent,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "center"
   },
-
   statValue: {
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 24,
-    textAlign: "center",
+    fontWeight: "600",
+    fontSize: 18,
+    textAlign: "center"
   },
-
   statLabel: {
     marginTop: 4,
     color: COLORS.sub,
-    fontWeight: "800",
+    fontWeight: "600",
     fontSize: 12,
     textAlign: "center",
-    lineHeight: 16,
+    lineHeight: 16
   },
-
   actionsGrid: {
-    gap: 10,
+    gap: 10
   },
-
   actionCard: {
-    minHeight: 76,
-    borderRadius: 18,
+    minHeight: 44,
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     backgroundColor: COLORS.card,
@@ -628,129 +508,114 @@ const s = StyleSheet.create({
         shadowColor: COLORS.text,
         shadowOpacity: 0.04,
         shadowRadius: 7,
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: {
+          width: 0,
+          height: 4
+        }
       },
-      android: { elevation: 1 },
-      default: {},
-    }),
+      android: {
+        elevation: 1
+      },
+      default: {}
+    })
   },
-
   actionPrimary: {
     backgroundColor: COLORS.accent,
-    borderColor: COLORS.accent,
+    borderColor: COLORS.accent
   },
-
   actionIconPrimary: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.18)"
   },
-
   actionIconNeutral: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.card2,
+    backgroundColor: COLORS.card2
   },
-
   actionIconPdf: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.success,
+    backgroundColor: COLORS.success
   },
-
+  actionIconSave: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.accentDark
+  },
+  actionIconCsv: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.warning
+  },
   actionIconRefresh: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.sub,
+    backgroundColor: COLORS.sub
   },
-
   actionTextWrap: {
-    flex: 1,
+    flex: 1
   },
-
   actionTitlePrimary: {
     fontSize: 17,
-    fontWeight: "900",
-    color: COLORS.card,
+    fontWeight: "600",
+    color: COLORS.card
   },
-
   actionSubPrimary: {
     marginTop: 3,
     color: "rgba(255,255,255,0.86)",
-    fontWeight: "700",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 13
   },
-
   actionTitle: {
     fontSize: 16,
-    fontWeight: "900",
-    color: COLORS.text,
+    fontWeight: "600",
+    color: COLORS.text
   },
-
   actionSub: {
     marginTop: 3,
     color: COLORS.sub,
-    fontWeight: "700",
-    fontSize: 13,
+    fontWeight: "600",
+    fontSize: 13
   },
-
   cardDisabled: {
-    opacity: 0.72,
+    opacity: 0.72
   },
-
   noteCard: {
-    borderRadius: 18,
+    borderRadius: 14,
     padding: 15,
     backgroundColor: COLORS.card2,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.border
   },
-
   noteTitle: {
     color: COLORS.text,
-    fontWeight: "900",
-    fontSize: 15,
+    fontWeight: "600",
+    fontSize: 15
   },
-
   noteText: {
     marginTop: 6,
     color: COLORS.sub,
-    fontWeight: "700",
+    fontWeight: "600",
     lineHeight: 20,
-    fontSize: 14,
-  },
+    fontSize: 14
+  }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,7 +1,8 @@
-﻿// apps/mobile/src/lib/api.ts  (FULL FILE – merged, nothing deleted)
+// apps/mobile/src/lib/api.ts  (FULL FILE – merged, nothing deleted)
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Application from "expo-application";
 import { getToken } from "./auth";
+import { getVerifiedServerApiUrl } from "./serverProfile";
 
 import * as FileSystem from "expo-file-system/legacy";
 import { Asset } from "expo-asset";
@@ -157,7 +158,7 @@ async function downloadCompanyLogoIfNeeded(logoUrlRel: string, updatedAt?: strin
 
     const target = logoLocalPath(extGuess);
 
-    const absUrl = apiResolveUrl(logoUrlRel); // must exist in your api layer
+    const absUrl = await apiResolveUrl(logoUrlRel);
     const dl = await FileSystem.downloadAsync(absUrl, target, {
       headers: await apiAuthHeaders(), // must return Authorization header
     });
@@ -169,13 +170,11 @@ async function downloadCompanyLogoIfNeeded(logoUrlRel: string, updatedAt?: strin
 }
 
 /**
- * Base URL resolution order (DEV):
- * 1) EXPO_PUBLIC_API_URL (env)
- * 2) AsyncStorage override (api_base_url)  [DEV ONLY]
- * 3) fallback https://api.rlcbausoftware.com (Cloudflare Tunnel)
- *
- * Production hardening:
- * - In PROD, AsyncStorage override is ignored.
+ * Base URL resolution order:
+ * 1) verified RLC Cloud/private-server profile (QR or cloud identity)
+ * 2) EXPO_PUBLIC_API_URL
+ * 3) legacy development override
+ * 4) RLC Cloud fallback
  */
 const ENV_API_URL_RAW = (process.env.EXPO_PUBLIC_API_URL?.trim() || "").replace(
   /\/$/,
@@ -188,9 +187,9 @@ console.log("[RLC] ENV_API_URL_RAW =", ENV_API_URL_RAW);
 const FALLBACK_API_URL = "https://api.rlcbausoftware.com";
 
 /** Keep a sync default (used for api.apiUrl field), real requests use getApiUrl() */
-const API_URL = ENV_API_URL_RAW && (/^https:\/\//i.test(ENV_API_URL_RAW) || __DEV__)
-  ? ENV_API_URL_RAW.replace(/\/$/, "")
-  : FALLBACK_API_URL;
+const API_URL = String(ENV_API_URL_RAW || "").trim()
+  ? ENV_API_URL_RAW!.replace(/\/$/, "")
+  : FALLBACK_API_URL.replace(/\/$/, "");
 
 /** PROD hardening switch */
 export const IS_DEV = typeof __DEV__ !== "undefined" ? __DEV__ : false;
@@ -320,20 +319,20 @@ function coerceApiHost(v: string): string {
 }
 
 function isValidBaseUrl(v: string): boolean {
-  return IS_DEV ? /^https?:\/\/.+/i.test(v) : /^https:\/\/.+/i.test(v);
+  return /^https?:\/\/.+/i.test(v);
 }
 
 /**
- * Returns the effective API URL:
- * - env var if present
- * - else AsyncStorage override if set (DEV ONLY)
- * - else fallback
- *
- * ✅ PROD hardening:
- * - AsyncStorage override is ignored in PROD builds.
+ * Production accepts only a server profile verified through the RLC pairing
+ * endpoint. The unrestricted legacy URL override remains development-only.
  */
 export async function getApiUrl(): Promise<string> {
-  if (ENV_API_URL_RAW && isValidBaseUrl(ENV_API_URL_RAW)) return coerceApiHost(ENV_API_URL_RAW);
+  try {
+    const verified = await getVerifiedServerApiUrl();
+    if (verified) return coerceApiHost(verified);
+  } catch {}
+
+  if (ENV_API_URL_RAW) return coerceApiHost(ENV_API_URL_RAW);
 
   if (!IS_DEV) return coerceApiHost(FALLBACK_API_URL);
 
@@ -473,8 +472,7 @@ function isPublicEndpoint(path: string) {
   return (
     p.startsWith("/api/auth/") ||
     p === "/api/health" ||
-    p === "/health" ||
-    p.startsWith("/api/license/")
+    p === "/health"
   );
 }
 
@@ -1345,6 +1343,38 @@ export async function projectPdfs(
  * PHOTOS / NOTIZEN (SERVER routes/fotos.ts)
  * ========================= */
 
+export async function uploadProjectArtifactToDms(params: {
+  projectIdOrCode: string;
+  fileUri: string;
+  fileName: string;
+  mimeType: string;
+  module?: string;
+}): Promise<any> {
+  const projectIdOrCode = String(params.projectIdOrCode || "").trim();
+  if (!projectIdOrCode) throw new Error("Projekt fehlt für DMS-Archivierung.");
+
+  const uploadUri = await asUploadableUri(String(params.fileUri || ""));
+  const fileName =
+    String(params.fileName || "export.bin")
+      .replace(/[^\w.-]+/g, "_")
+      .replace(/_+/g, "_")
+      .slice(0, 180) || "export.bin";
+
+  const fd = new FormData();
+  fd.append("module", String(params.module || "MOBILE_EXPORT"));
+
+  // @ts-ignore React-Native FormData-Datei
+  fd.append("file", {
+    uri: uploadUri,
+    name: fileName,
+    type: String(params.mimeType || "application/octet-stream"),
+  });
+
+  return request<any>(
+    `/api/projects/${encodeURIComponent(projectIdOrCode)}/documents/upload`,
+    { method: "POST", body: fd }
+  );
+}
 function fotosNotesEndpoint(projectId: string) {
   return `/api/fotos/projects/${encodeURIComponent(projectId)}/fotos/notes`;
 }
@@ -1478,11 +1508,11 @@ async function apiAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
-function apiResolveUrl(relOrAbs: string): string {
+async function apiResolveUrl(relOrAbs: string): Promise<string> {
   const raw = String(relOrAbs || "").trim();
   if (!raw) return raw;
   if (/^https?:\/\//i.test(raw)) return raw;
-  const base = coerceApiHost(API_URL).replace(/\/$/, "");
+  const base = (await getApiUrl()).replace(/\/$/, "");
   if (raw.startsWith("/")) return `${base}${raw}`;
   return `${base}/${raw}`;
 }
@@ -1549,14 +1579,12 @@ export const api = {
     return getPdfTemplateUri({ mode: mode || "SERVER_SYNC" });
   },
 
-  absUrl(relOrAbs: string): string {
+  async absUrl(relOrAbs: string): Promise<string> {
     const raw = String(relOrAbs || "").trim();
     if (!raw) return raw;
     if (/^https?:\/\//i.test(raw)) return raw;
 
-    // usa la base "statica" migliore possibile MA coerente col fallback
-    // (per runtime override usa absUrlAsync)
-    const base = coerceApiHost(API_URL).replace(/\/$/, "");
+    const base = (await getApiUrl()).replace(/\/$/, "");
     if (raw.startsWith("/")) return `${base}${raw}`;
     return `${base}/${raw}`;
   },
@@ -2745,70 +2773,45 @@ export const api = {
 
   async submitTagesberichtInbox(projectIdOrCode: string, payload: any) {
     const projectKey = await resolveProjectCode(projectIdOrCode);
-    return request<any>(tagesberichtSubmitEndpoint(), {
+
+    return request<any>(tagesberichtInboxSubmitEndpoint(), {
       method: "POST",
       body: JSON.stringify({
         ...(payload || {}),
         projectId: projectKey,
         projectCode: projectKey,
+        reportType: "TAGESBERICHT",
+        docType: "TAGESBERICHT",
+        workflowStatus: "EINGEREICHT",
       }),
     });
   },
 
   async tagesberichtInboxList(projectIdOrCode: string) {
-  const projectKey = await resolveProjectCode(projectIdOrCode);
+    const projectKey = await resolveProjectCode(projectIdOrCode);
 
-  const candidates = [
-    tagesberichtInboxListEndpoint(projectKey),
-    tagesberichtInboxListEndpointPlural(projectKey),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, { method: "GET" });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht inbox list failed");
-},
+    return request<any>(
+      `/api/tagesbericht/inbox/list?projectId=${encodeURIComponent(projectKey)}`,
+      { method: "GET" }
+    );
+  },
 
   async tagesberichtReject(
-  projectIdOrCode: string,
-  docId: string,
-  reason: string
-) {
-  const projectKey = await resolveProjectCode(projectIdOrCode);
+    projectIdOrCode: string,
+    docId: string,
+    reason: string
+  ) {
+    const projectKey = await resolveProjectCode(projectIdOrCode);
 
-  const body = {
-    projectId: projectKey,
-    docId,
-    reason,
-  };
-
-  const candidates = [
-    tagesberichtInboxRejectEndpoint(),
-    tagesberichtInboxRejectEndpointPlural(),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht reject failed");
-},
+    return request<any>("/api/tagesbericht/inbox/reject", {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: projectKey,
+        docId,
+        reason,
+      }),
+    });
+  },
 
    async commitTagesbericht(projectIdOrCode: string, payload: any) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
@@ -2843,22 +2846,10 @@ export const api = {
 async tagesberichtInboxRead(projectIdOrCode: string, docId: string) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
 
-  const candidates = [
-    tagesberichtInboxReadEndpoint(projectKey, docId),
-    tagesberichtInboxReadEndpointPlural(projectKey, docId),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, { method: "GET" });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht inbox read failed");
+  return request<any>(
+    `/api/tagesbericht/inbox/read?projectId=${encodeURIComponent(projectKey)}&docId=${encodeURIComponent(docId)}`,
+    { method: "GET" }
+  );
 },
 
 async tagesberichtApprove(
@@ -2868,31 +2859,14 @@ async tagesberichtApprove(
 ) {
   const projectKey = await resolveProjectCode(projectIdOrCode);
 
-  const body = {
-    projectId: projectKey,
-    docId,
-    approvedBy: approvedBy || undefined,
-  };
-
-  const candidates = [
-    tagesberichtInboxApproveEndpoint(),
-    tagesberichtInboxApproveEndpointPlural(),
-  ];
-
-  let lastErr: any = null;
-
-  for (const path of candidates) {
-    try {
-      return await request<any>(path, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-    } catch (e: any) {
-      lastErr = e;
-    }
-  }
-
-  throw lastErr || new Error("Tagesbericht approve failed");
+  return request<any>("/api/tagesbericht/inbox/approve", {
+    method: "POST",
+    body: JSON.stringify({
+      projectId: projectKey,
+      docId,
+      approvedBy: approvedBy || undefined,
+    }),
+  });
 },
 
   async pushTagesberichtToServer(projectIdOrCode: string, row: any) {

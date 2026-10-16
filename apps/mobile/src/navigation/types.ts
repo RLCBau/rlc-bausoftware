@@ -1,4 +1,4 @@
-﻿// apps/mobile/src/navigation/types.ts
+// apps/mobile/src/navigation/types.ts
 
 /**
  * Policy (offline-first reale):
@@ -82,6 +82,7 @@ export type RlcCopilotParams = ProjectBaseParams & {
  * ===================== */
 
 export type RootStackParamList = {
+  Home: { projectId: string };
   /* ===== CORE ===== */
 
   Start: undefined;
@@ -102,6 +103,8 @@ export type RootStackParamList = {
     | undefined;
 
   Arbeitsmodus: { force?: boolean } | undefined;
+
+  ServerSetup: undefined;
 
   Login: {
     mode: ArbeitsmodusType;
@@ -127,6 +130,9 @@ export type RootStackParamList = {
   PdfViewer: {
     uri: string;
     title?: string;
+    projectId?: string;
+    projectCode?: string;
+    documentType?: string;
   };
 
   Anmelden: ProjectBaseParams;
@@ -249,7 +255,9 @@ export type RootStackParamList = {
     fromMengen?: boolean;
     mengenId?: string;
 
-    abschlagNr?: number;
+    abschlagNr?: number | string;
+    inboxSnapshot?: any;
+    fromInbox?: boolean;
   };
 
   /* =====================
@@ -262,5 +270,8 @@ export type RootStackParamList = {
     fromMengen?: boolean;
     mengenId?: string;
   };
+  Arbeitszeiten: {
+    projectId: string;
+    projectCode?: string;
+  };
 };
-

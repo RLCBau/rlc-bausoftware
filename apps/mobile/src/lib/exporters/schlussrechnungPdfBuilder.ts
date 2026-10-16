@@ -1,10 +1,12 @@
-﻿import * as Print from "expo-print";
+import { renderMobilePdfViaServer } from "../mobilePdfCore";
+import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import {
-  getCompanyHeaderCached,
-  getCompanyLogoUriCached,
-} from "../companyCache";
+  RLC_PDF_FONT_STACK,
+  loadRlcPdfBranding,
+  renderRlcPdfCompanyHeader,
+} from "./pdfBranding";
 
 /* ================= TYPES ================= */
 
@@ -147,66 +149,50 @@ function hasBank(bank?: Bank) {
 function renderHeader(params: {
   title?: string;
   subTitle?: string;
-  logoData?: string;
-  company?: any;
+  brandingHeaderHtml: string;
   docNo?: string;
   date?: string;
   period?: string;
   projectCode?: string;
 }) {
-  const { title, subTitle, logoData, company, docNo, date, period, projectCode } =
-    params;
+  const {
+    title,
+    subTitle,
+    brandingHeaderHtml,
+    docNo,
+    date,
+    period,
+    projectCode,
+  } = params;
 
   return `
-    <div style="border-bottom:1px solid #d8e1ea;padding-bottom:10px;margin-bottom:14px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
-        <div style="flex:1;">
-          <div style="font-size:22px;font-weight:800;color:#0f172a;line-height:1.1;">
-            ${esc(title || "SCHLUSSRECHNUNG")}
-          </div>
-          ${
-            subTitle
-              ? `<div style="margin-top:4px;font-size:10px;color:#64748b;font-weight:600;">${esc(
-                  subTitle
-                )}</div>`
-              : ""
-          }
+    ${brandingHeaderHtml}
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:14px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:22px;font-weight:800;color:#0f172a;line-height:1.1;">
+          ${esc(title || "SCHLUSSRECHNUNG")}
         </div>
         ${
-          logoData
-            ? `<img src="${logoData}" style="max-width:110px;max-height:50px;object-fit:contain;" />`
+          subTitle
+            ? `<div style="margin-top:4px;font-size:10px;color:#64748b;font-weight:600;">${esc(
+                subTitle
+              )}</div>`
             : ""
         }
       </div>
-
-      <div style="display:flex;justify-content:space-between;gap:16px;margin-top:10px;">
-        <div style="flex:1;font-size:10px;line-height:1.45;color:#0f172a;">
-          ${
-            company?.name
-              ? `<div style="font-size:12px;font-weight:800;margin-bottom:3px;">${esc(
-                  company.name
-                )}</div>`
-              : ""
-          }
-          ${company?.address ? `<div>${esc(company.address)}</div>` : ""}
-          ${company?.phone ? `<div>Tel: ${esc(company.phone)}</div>` : ""}
-          ${company?.email ? `<div>E-Mail: ${esc(company.email)}</div>` : ""}
-        </div>
-
-        <div style="min-width:220px;font-size:10px;line-height:1.45;color:#0f172a;text-align:right;">
-          ${docNo ? `<div><strong>Nr:</strong> ${esc(docNo)}</div>` : ""}
-          ${date ? `<div><strong>Datum:</strong> ${esc(date)}</div>` : ""}
-          ${
-            period
-              ? `<div><strong>Leistungszeitraum:</strong> ${esc(period)}</div>`
-              : ""
-          }
-          ${
-            projectCode
-              ? `<div><strong>Projektcode:</strong> ${esc(projectCode)}</div>`
-              : ""
-          }
-        </div>
+      <div style="min-width:220px;font-size:10px;line-height:1.45;color:#0f172a;text-align:right;">
+        ${docNo ? `<div><strong>Nr:</strong> ${esc(docNo)}</div>` : ""}
+        ${date ? `<div><strong>Datum:</strong> ${esc(date)}</div>` : ""}
+        ${
+          period
+            ? `<div><strong>Leistungszeitraum:</strong> ${esc(period)}</div>`
+            : ""
+        }
+        ${
+          projectCode
+            ? `<div><strong>Projektcode:</strong> ${esc(projectCode)}</div>`
+            : ""
+        }
       </div>
     </div>
   `;
@@ -398,9 +384,21 @@ function renderSignature() {
 /* ================= MAIN ================= */
 
 export async function buildSchlussrechnungPdf(input: Input) {
-  const company = await getCompanyHeaderCached().catch(() => null);
-  const logo = await getCompanyLogoUriCached().catch(() => null);
-  const logoData = await toDataUri(logo);
+  try {
+    const serverResult = await renderMobilePdfViaServer({
+      documentType: "SCHLUSSRECHNUNG",
+      projectFsKey: input.projectCode,
+      fileName: input.fileName,
+      payload: input,
+    });
+    return { pdfUri: serverResult.pdfUri, html: "" };
+  } catch (error: any) {
+    console.log("[RLC PDF CORE] Schlussrechnung fallback lokal:", String(error?.message || error));
+  }
+
+  const branding = await loadRlcPdfBranding();
+  const company = branding.company;
+  const brandingHeaderHtml = renderRlcPdfCompanyHeader(branding);
 
   const html = `
     <html>
@@ -417,12 +415,11 @@ export async function buildSchlussrechnungPdf(input: Input) {
           }
         </style>
       </head>
-      <body style="font-family:Arial,Helvetica,sans-serif;padding:18px 20px;color:#0B1720;font-size:10px;background:#ffffff;">
+      <body style="font-family:${RLC_PDF_FONT_STACK};padding:18px 20px;color:#0B1720;font-size:10px;background:#ffffff;">
         ${renderHeader({
           title: input.title || "SCHLUSSRECHNUNG",
           subTitle: input.subTitle,
-          logoData,
-          company,
+          brandingHeaderHtml,
           docNo: input.docNo,
           date: input.date,
           period: input.period,
