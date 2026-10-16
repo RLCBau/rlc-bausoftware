@@ -8,6 +8,7 @@ const items = [
   {id:"b",kind:"RECHNUNG", projectId:"BA-2026-B", status:"PENDING", tries:0,payload:{row:{id:"invoice-b"}}}
 ];
 let response=200;
+let semanticOk=true;
 const calls=[];
 const mockQueue = {
   queueList: async () => items.map(x=>({...x})),
@@ -17,7 +18,7 @@ const mockApi={api:{ projects: async()=>[], getApiUrl: async()=>"https://api.tes
 global.fetch=async (url,init)=>{
   calls.push({url,body:JSON.parse(init.body)});
   if(response===0) throw new Error("Network request failed");
-  return {ok:response===200,status:response,text:async()=>response===200?'{"ok":true}':"invalid request"};
+  return {ok:response===200,status:response,text:async()=>response===200?JSON.stringify({ok:semanticOk}):"invalid request"};
 };
 const source=path.resolve(__dirname,"../src/lib/sync.ts");
 const js=ts.transpileModule(fs.readFileSync(source,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
@@ -58,5 +59,10 @@ mod._compile(js,source);
   assert.deepEqual(first,{ok:1,fail:0});
   assert.deepEqual(second,{ok:0,fail:0});
   assert.equal(calls.length-before,1,"concurrent sync must submit invoice once");
+  items[0].status="PENDING";items[0].tries=0;items[0].nextTryAt=null;
+  semanticOk=false;
+  r=await mod.exports.syncAll({projectCode:"BA-2026-A"});
+  assert.deepEqual(r,{ok:0,fail:1},"HTTP 200 with ok:false must fail");
+  assert.equal(items[0].status,"ERROR","server rejection must not mark DONE");
   console.log("PASS syncAll: isolation, backoff, offline handling, concurrent single-flight");
 })().catch(e=>{console.error(e);process.exitCode=1;});
