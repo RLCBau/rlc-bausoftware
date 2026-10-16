@@ -524,6 +524,9 @@ export type QueueFlushOptions = {
 
   /** se true: ordina FIFO (oldest first). default true */
   fifo?: boolean;
+
+  /** Se impostato, gli altri progetti non devono cambiare stato. */
+  projectId?: string;
 };
 
 /**
@@ -543,6 +546,7 @@ export async function queueFlush(
   const maxTries = options?.maxTries ?? 8;
   const includeErrors = options?.includeErrors ?? true;
   const fifo = options?.fifo ?? true;
+  const targetProject = options?.projectId ? normalizeProjectKey(options.projectId) : null;
 
   return withLock(async () => {
     await queueNormalizeExisting();
@@ -560,6 +564,10 @@ export async function queueFlush(
 
     for (const item of ordered) {
       if (processed >= maxItems) break;
+      if (targetProject && item.projectId !== targetProject) {
+        skipped++;
+        continue;
+      }
 
       const isPending = item.status === "PENDING";
       const isError = item.status === "ERROR";
@@ -658,10 +666,7 @@ export async function queueFlushProject(
   options?: Omit<QueueFlushOptions, "fifo"> & { fifo?: boolean }
 ) {
   const key = normalizeProjectKey(projectId);
-  return queueFlush(async (item) => {
-    if (item.projectId !== key) return null;
-    return executor(item);
-  }, options);
+  return queueFlush(executor, { ...options, projectId: key });
 }
 
 /**

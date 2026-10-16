@@ -105,6 +105,10 @@ export async function syncAll(
 
   for (const item of list) {
     if (item.status === "DONE") continue;
+    // Rispetta il backoff previsto dalla coda; un invio fallito non deve
+    // essere ripetuto immediatamente da ogni schermata.
+    if (item.nextTryAt && item.nextTryAt > Date.now()) continue;
+    if ((item.tries || 0) >= 8 && item.status === "ERROR") continue;
 
     // ✅ filtro per progetto (se richiesto)
     if (targetPk) {
@@ -112,16 +116,24 @@ export async function syncAll(
       if (itemPk !== targetPk) continue;
     }
 
+    const triesNow = (item.tries || 0) + 1;
     try {
+      await queueUpdate(item.id, { lastTryAt: Date.now(), tries: triesNow });
       await syncOne(item);
-      await queueUpdate(item.id, { status: "DONE", error: undefined });
+      await queueUpdate(item.id, { status: "DONE", error: undefined, nextTryAt: null });
       ok++;
     } catch (e: any) {
+      const msg = String(e?.message || "sync failed");
+      const offline = /network request failed|failed to fetch|networkerror|offline|timeout|socket/i.test(msg);
+      const retryDelay = Math.min(300000, Math.max(5000, 2 ** triesNow * 1000));
       await queueUpdate(item.id, {
-        status: "ERROR",
-        error: e?.message || "sync failed",
+        status: offline ? "PENDING" : "ERROR",
+        error: offline ? undefined : msg.slice(0, 500),
+        tries: offline ? item.tries || 0 : triesNow,
+        nextTryAt: Date.now() + retryDelay,
       });
       fail++;
+      if (offline) break;
     }
   }
   return { ok, fail };
