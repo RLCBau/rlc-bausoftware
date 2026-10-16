@@ -47,5 +47,16 @@ mod._compile(js,source);
   assert.equal(items[1].status,"PENDING");
   assert.equal(items[1].tries,1,"offline rollback retry count");
   assert.ok(items[1].nextTryAt > Date.now());
-  console.log("PASS syncAll: project isolation, server errors/backoff, offline handling");
+  // Two screens starting sync simultaneously must not submit the same document twice.
+  items[0].status="PENDING"; items[0].tries=0; items[0].nextTryAt=null;
+  response=200;
+  const before=calls.length;
+  const [first,second]=await Promise.all([
+    mod.exports.syncAll({projectCode:"BA-2026-A"}),
+    mod.exports.syncAll({projectCode:"BA-2026-A"})
+  ]);
+  assert.deepEqual(first,{ok:1,fail:0});
+  assert.deepEqual(second,{ok:0,fail:0});
+  assert.equal(calls.length-before,1,"concurrent sync must submit invoice once");
+  console.log("PASS syncAll: isolation, backoff, offline handling, concurrent single-flight");
 })().catch(e=>{console.error(e);process.exitCode=1;});
