@@ -9,6 +9,7 @@ import { COLORS, RLC_SPACING, RLC_RADIUS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
+import { saveInvoiceDraftOnServer } from "../lib/fiscalInvoice";
 import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
 import { parseRlcKiSmartDoc } from "../lib/rlcKiSmartParser";
 
@@ -840,6 +841,22 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       setBusy(false);
     }
   }
+  async function syncFiscalDraft() {
+    try {
+      if (await getMode() === "NUR_APP") {
+        Alert.alert("Nur App", "Die Fiskal-Synchronisierung benötigt eine Server-Verbindung.");
+        return;
+      }
+      setBusy(true);
+      const draft = await persistDoc();
+      await saveInvoiceDraftOnServer(draft.projectId || projectId || projectCode, draft);
+      Alert.alert("Server bestätigt", "Rechnungsentwurf gespeichert. Nicht steuerlich ausgestellt.");
+    } catch (error: any) {
+      Alert.alert("Server nicht bestätigt", String(error?.message || "Entwurf bleibt lokal gespeichert.").slice(0, 300));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function openLinkedMengenPdf() {
     try {
       const uri = String(doc?.mengenPdfUri || "").trim();
@@ -1379,6 +1396,9 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         </View>
 
         <Text style={s.sourceText}>Status: Entwurf — Speichern oder PDF erstellen stellt keine Rechnung steuerlich aus. Die verbindliche Ausstellung mit XRechnung und revisionssicherer Ablage erfolgt ausschließlich nach Freigabe im Server-Workflow.</Text>
+        <Pressable style={s.btnSecondary} onPress={() => void syncFiscalDraft()} disabled={busy}>
+          <Text style={s.btnTxt}>Entwurf am Server speichern</Text>
+        </Pressable>
         <Pressable style={s.save} onPress={save} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? "Bitte warten..." : "Speichern"}</Text>
         </Pressable>
