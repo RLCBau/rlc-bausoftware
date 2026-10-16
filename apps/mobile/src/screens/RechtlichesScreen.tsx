@@ -2,6 +2,7 @@ import React from "react";
 import { SafeAreaView, ScrollView, View, Text, Pressable, Alert } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { COLORS, createRlcStyles } from "../ui/theme";
+import { request } from "../lib/api";
 
 const PRIVACY_URL = "https://rlcbausoftware.com/datenschutz/";
 const IMPRINT_URL = "https://rlcbausoftware.com/impressum/";
@@ -11,6 +12,34 @@ async function openUrl(url: string) {
     await WebBrowser.openBrowserAsync(url);
   } catch {
     Alert.alert("Fehler", "Die Seite konnte nicht geöffnet werden.");
+  }
+}
+
+async function submitPrivacyRequest(requestType: "ACCESS" | "ERASURE") {
+  try {
+    const result: any = await request("/api/privacy-rights/self-service", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requestType,
+        description:
+          requestType === "ERASURE"
+            ? "Antrag aus RLC Mobile auf Löschung der personenbezogenen Daten, soweit keine gesetzlichen Aufbewahrungspflichten entgegenstehen."
+            : "Antrag aus RLC Mobile auf Auskunft über die verarbeiteten personenbezogenen Daten."
+      })
+    });
+    Alert.alert(
+      "Antrag eingegangen",
+      `Vorgang ${String(result?.id || "")} wurde registriert. Status: ${String(result?.status || "OPEN")}.`
+    );
+  } catch (error: any) {
+    const message = String(error?.message || error || "");
+    Alert.alert(
+      "Antrag nicht gesendet",
+      message.includes("401") || message.includes("AUTH")
+        ? "Bitte zuerst im Server-Modus anmelden. Ohne Server können lokale Daten direkt durch Löschen des lokalen Benutzers bzw. der App-Daten entfernt werden."
+        : message || "Die Anfrage konnte nicht registriert werden."
+    );
   }
 }
 
@@ -59,6 +88,20 @@ export default function RechtlichesScreen() {
           <Text style={s.buttonTextSecondary}>Impressum öffnen</Text>
         </Pressable>
 
+        <View style={s.card}>
+          <Text style={s.heading}>Ihre Datenschutzrechte</Text>
+          <Text style={s.text}>
+            Angemeldete Server-Benutzer können einen DSGVO-Antrag direkt registrieren. Gesetzliche
+            Aufbewahrungspflichten werden bei Löschanträgen berücksichtigt.
+          </Text>
+          <Pressable style={s.rightsButton} onPress={() => submitPrivacyRequest("ACCESS")}>
+            <Text style={s.buttonTextSecondary}>Auskunft beantragen</Text>
+          </Pressable>
+          <Pressable style={s.rightsButton} onPress={() => submitPrivacyRequest("ERASURE")}>
+            <Text style={s.buttonTextSecondary}>Löschung beantragen</Text>
+          </Pressable>
+        </View>
+
         <Text style={s.note}>
           Stand der App-Hinweise: 16.10.2026. Die vollständigen Informationen und Betroffenenrechte
           stehen in der Datenschutzerklärung.
@@ -99,5 +142,15 @@ const s = createRlcStyles("RechtlichesScreen", {
   },
   buttonText: { color: COLORS.card, fontWeight: "700", fontSize: 14 },
   buttonTextSecondary: { color: COLORS.accentDark, fontWeight: "700", fontSize: 14 },
+  rightsButton: {
+    minHeight: 42,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    marginTop: 10,
+    backgroundColor: COLORS.card,
+  },
   note: { fontSize: 12, lineHeight: 17, color: COLORS.sub, marginTop: 4 },
 });

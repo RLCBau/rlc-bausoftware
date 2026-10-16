@@ -7,11 +7,16 @@ import * as ImageManipulator from "expo-image-manipulator";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Alert, Linking, Platform } from "react-native";
 import { getApiUrl } from "../api";
+import { getServerToken } from "../auth";
 import {
   RLC_PDF_FONT_STACK,
   loadRlcPdfBranding,
   renderRlcPdfCompanyHeader,
 } from "./pdfBranding";
+
+const devLog = (...args: any[]) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console["log"](...args);
+};
 
 type EmailPdfInput = {
   subject: string;
@@ -165,7 +170,7 @@ async function getApiBaseUrlFromStorage(): Promise<string> {
 
 async function getAuthHeadersForDownload(): Promise<Record<string, string>> {
   try {
-    const token = String((await AsyncStorage.getItem("auth_token")) || "").trim();
+    const token = String((await getServerToken()) || "").trim();
     if (!token) return {};
     return { Authorization: `Bearer ${token}` };
   } catch {
@@ -175,7 +180,7 @@ async function getAuthHeadersForDownload(): Promise<Record<string, string>> {
 
 async function getAuthToken(): Promise<string> {
   try {
-    return String((await AsyncStorage.getItem("auth_token")) || "").trim();
+    return String((await getServerToken()) || "").trim();
   } catch {
     return "";
   }
@@ -212,7 +217,7 @@ async function ensureLocalFromRemote(
     const dl = await FileSystem.downloadAsync(abs, target, { headers });
     return dl.uri || target;
   } catch (e: any) {
-    console.log("[PDFDBG] download remote FAILED:", {
+    devLog("[PDFDBG] download remote FAILED:", {
       abs,
       err: String(e?.message || e),
     });
@@ -289,7 +294,7 @@ async function ensurePrintableImageUri(
   const isPh = isIosPhotosUri(uriIn);
 
   if (isPh || isHeic) {
-    console.log("[PDFDBG] convert -> JPEG:", {
+    devLog("[PDFDBG] convert -> JPEG:", {
       uriIn,
       mime0,
       isPh,
@@ -310,14 +315,14 @@ async function ensurePrintableImageUri(
           [{ resize: t.resize }],
           { compress: t.compress, format: ImageManipulator.SaveFormat.JPEG }
         );
-        console.log("[PDFDBG] convert OK:", out.uri);
+        devLog("[PDFDBG] convert OK:", out.uri);
         return { uri: out.uri, mime: "image/jpeg" };
       } catch (e: any) {
-        console.log("[PDFDBG] convert TRY failed:", String(e?.message || e));
+        devLog("[PDFDBG] convert TRY failed:", String(e?.message || e));
       }
     }
 
-    console.log("[PDFDBG] convert FAILED completely, keeping original:", uriIn);
+    devLog("[PDFDBG] convert FAILED completely, keeping original:", uriIn);
     return { uri: uriIn, mime: mime0 };
   }
 
@@ -332,26 +337,26 @@ async function readAsBase64DataUrl(img: {
   const original = img?.uri;
 
   try {
-    console.log("[PDFDBG] readAsBase64DataUrl start:", {
+    devLog("[PDFDBG] readAsBase64DataUrl start:", {
       original,
       name: img?.name,
       type: img?.type,
     });
 
     const u0 = await ensureLocalFromRemote(img.uri, { name: img.name, type: img.type });
-    if (u0 !== img.uri) console.log("[PDFDBG] after ensureLocalFromRemote:", u0);
+    if (u0 !== img.uri) devLog("[PDFDBG] after ensureLocalFromRemote:", u0);
 
     const u1 = await ensureFileUri(u0, { name: img.name, type: img.type });
-    console.log("[PDFDBG] after ensureFileUri:", u1);
+    devLog("[PDFDBG] after ensureFileUri:", u1);
 
     const { uri: u2, mime } = await ensurePrintableImageUri(u1, {
       name: img.name,
       type: img.type,
     });
-    console.log("[PDFDBG] after ensurePrintableImageUri:", { u2, mime });
+    devLog("[PDFDBG] after ensurePrintableImageUri:", { u2, mime });
 
     if (isIosPhotosUri(u2)) {
-      console.log("[PDFDBG] still ph:// after conversion -> giving up:", u2);
+      devLog("[PDFDBG] still ph:// after conversion -> giving up:", u2);
       return null;
     }
 
@@ -359,14 +364,14 @@ async function readAsBase64DataUrl(img: {
       encoding: FileSystem.EncodingType.Base64,
     });
 
-    console.log("[PDFDBG] base64 length:", b64?.length || 0);
+    devLog("[PDFDBG] base64 length:", b64?.length || 0);
 
     const finalMime =
       mime === "image/heic" || mime === "image/heif" ? "image/jpeg" : mime;
 
     return `data:${finalMime};base64,${b64}`;
   } catch (e: any) {
-    console.log("[PDFDBG] readAsBase64DataUrl FAILED:", {
+    devLog("[PDFDBG] readAsBase64DataUrl FAILED:", {
       original,
       err: String(e?.message || e),
     });
@@ -383,7 +388,7 @@ async function buildCompanyPdfHeaderHtml(): Promise<string> {
     const branding = await loadRlcPdfBranding();
     return renderRlcPdfCompanyHeader(branding);
   } catch (e: any) {
-    console.log(
+    devLog(
       "[PDFDBG] buildCompanyPdfHeaderHtml failed:",
       String(e?.message || e)
     );
@@ -957,7 +962,7 @@ async function firstPhotoDataUrlFromRowOrLines(opts: {
       type: firstImg?.type,
     });
   } catch (e: any) {
-    console.log("[PDFDBG] firstPhotoDataUrlFromRowOrLines FAILED:", String(e?.message || e));
+    devLog("[PDFDBG] firstPhotoDataUrlFromRowOrLines FAILED:", String(e?.message || e));
     return null;
   }
 }
@@ -3354,7 +3359,7 @@ async function savePdfToProjectFolder(params: {
     await FileSystem.copyAsync({ from: params.sourceUri, to: target });
     return target;
   } catch (e) {
-    console.log(
+    devLog(
       "[PDFDBG] savePdfToProjectFolder copy FAILED -> fallback:",
       String((e as any)?.message || e)
     );
@@ -3414,7 +3419,7 @@ async function makeFreshPdfCopyForOpen(uri: string): Promise<string> {
     await FileSystem.copyAsync({ from: uri, to: fresh });
     return fresh.startsWith("file://") ? fresh : `file://${fresh}`;
   } catch (e: any) {
-    console.log("[PDFDBG] makeFreshPdfCopyForOpen failed:", String(e?.message || e));
+    devLog("[PDFDBG] makeFreshPdfCopyForOpen failed:", String(e?.message || e));
     return uri;
   }
 }
@@ -3425,7 +3430,7 @@ async function openPdf(uri: string) {
     const freshUri = await makeFreshPdfCopyForOpen(uri);
     await Linking.openURL(freshUri);
   } catch (e) {
-    console.log("[PDFDBG] openPdf failed:", String((e as any)?.message || e));
+    devLog("[PDFDBG] openPdf failed:", String((e as any)?.message || e));
   }
 }
 
@@ -3646,7 +3651,7 @@ async function exportUnifiedRegieModelPdf(params: {
       fileUri: saved,
     });
   } catch (e: any) {
-    console.log("[PDFDBG] uploadProjectPdfToServer failed:", String(e?.message || e));
+    devLog("[PDFDBG] uploadProjectPdfToServer failed:", String(e?.message || e));
   }
 
   return {
@@ -3669,7 +3674,7 @@ export async function exportRegiePdfToProject(input: ExportRegieInput): Promise<
       payload: input,
     });
   } catch (error: any) {
-    console.log("[RLC PDF CORE] Regie fallback lokal:", String(error?.message || error));
+    devLog("[RLC PDF CORE] Regie fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
@@ -3689,7 +3694,7 @@ export async function exportLieferscheinPdfToProject(input: ExportLsInput): Prom
       payload: input,
     });
   } catch (error: any) {
-    console.log("[RLC PDF CORE] Lieferschein fallback lokal:", String(error?.message || error));
+    devLog("[RLC PDF CORE] Lieferschein fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
@@ -3709,7 +3714,7 @@ export async function exportPhotosPdfToProject(input: ExportPhotosInput): Promis
       payload: input,
     });
   } catch (error: any) {
-    console.log("[RLC PDF CORE] Fotos fallback lokal:", String(error?.message || error));
+    devLog("[RLC PDF CORE] Fotos fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
@@ -3731,7 +3736,7 @@ export async function exportTagesberichtPdfToProject(
       payload: input,
     });
   } catch (error: any) {
-    console.log("[RLC PDF CORE] Tagesbericht fallback lokal:", String(error?.message || error));
+    devLog("[RLC PDF CORE] Tagesbericht fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
     projectFsKey: input.projectFsKey,
@@ -3828,7 +3833,7 @@ export async function exportRegieBlueTemplatePdf(params: {
       fileUri: saved,
     });
   } catch (e: any) {
-    console.log(
+    devLog(
       "[PDFDBG] exportRegieBlueTemplatePdf upload failed:",
       String(e?.message || e)
     );

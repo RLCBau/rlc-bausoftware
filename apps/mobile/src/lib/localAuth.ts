@@ -94,3 +94,10 @@ export async function localIsLoggedIn() {
 export async function localUserEmail() {
   return (await AsyncStorage.getItem(KEY_EMAIL)) || "";
 }
+
+export async function localDeleteAccount() {
+  await AsyncStorage.multiRemove([KEY_EMAIL, KEY_PWHASH, KEY_LOGGED]);
+  try {
+    await SecureStore.deleteItemAsync(KEY_VERIFIER);
+  } catch {}
+}

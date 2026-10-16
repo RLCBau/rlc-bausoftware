@@ -3,12 +3,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, Alert, Platform, Modal, Linking, SafeAreaView, KeyboardAvoidingView, ScrollView, Keyboard, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList, type ArbeitsmodusType } from "../navigation/types";
 import { api } from "../lib/api";
 import { COLORS, createRlcStyles } from "../ui/theme";
 import { clearToken, setToken, getToken, getAuthState, setAuthState, patchAuthState, logout, setAuthMode } from "../lib/auth";
+import { localRegister, localLogin, localDeleteAccount } from "../lib/localAuth";
 import { getCompanyHeaderCached, getCompanyLogoUriCached, setCompanyBrandingOffline } from "../lib/companyCache";
 type Props = NativeStackScreenProps<RootStackParamList, "Login">;
 const IS_DEV = typeof __DEV__ !== "undefined" ? __DEV__ : false;
@@ -32,9 +34,6 @@ const KEY_LOCAL_VERIFY_TS = "rlc_mobile_local_verify_ts_v1";
 const ADMIN_CODE_KEY_BASE = "rlc_admin_unlock_code_v1";
 const ADMIN_UNLOCKED_KEY_BASE = "rlc_admin_unlocked_v1";
 const COMPANY_NAME_KEY_BASE = "rlc_company_name_v1";
-
-// ✅ TEST CODE per te
-const TEST_ADMIN_CODE = "RLC-TEST-2026";
 
 /** Roles */
 type SessionRole = "BAULEITER" | "BUERO" | "KALKULATOR" | "POLIER" | "FAHRER" | "MITARBEITER";
@@ -134,7 +133,7 @@ function mapLoginError(e: any) {
 }
 type LocalUser = {
   email: string;
-  passHash: string;
+  passHash?: string; // legacy only; removed after secure migration
   createdAt: number;
 };
 type LocalProfile = {
@@ -306,6 +305,14 @@ export default function LoginScreen({
     try {
       const unlocked = await AsyncStorage.getItem(modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m));
       if (unlocked === "1") {
+        if (m === "NUR_APP") {
+          const secureCode = String((await SecureStore.getItemAsync(modeScopedKey(ADMIN_CODE_KEY_BASE, m))) || "").trim();
+          if (!secureCode) {
+            await AsyncStorage.removeItem(modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m));
+            setAdminUnlocked(false);
+            return false;
+          }
+        }
         setAdminUnlocked(true);
         const cn = String((await AsyncStorage.getItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m))) || "");
         setCompanyName(cn);
@@ -335,17 +342,17 @@ export default function LoginScreen({
     if (!code) throw new Error("Bitte Admin-Code eingeben.");
     setAdminBusy(true);
     try {
-      if (code === TEST_ADMIN_CODE) {
-        await AsyncStorage.setItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m), cn);
-        await AsyncStorage.setItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m), code);
-        await AsyncStorage.setItem(modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m), "1");
-        setAdminUnlocked(true);
-        setPostVerifyStep("NONE");
-        return true;
-      }
       if (m === "NUR_APP") {
+        const secureKey = modeScopedKey(ADMIN_CODE_KEY_BASE, m);
+        const existingCode = String((await SecureStore.getItemAsync(secureKey)) || "").trim();
+        if (!existingCode) {
+          if (code.length < 8) throw new Error("Admin-Code muss mindestens 8 Zeichen haben.");
+          await SecureStore.setItemAsync(secureKey, code);
+        } else if (existingCode !== code) {
+          throw new Error("Admin-Code falsch.");
+        }
         await AsyncStorage.setItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m), cn);
-        await AsyncStorage.setItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m), code);
+        await AsyncStorage.removeItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m)).catch(() => {});
         await AsyncStorage.setItem(modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m), "1");
         setAdminUnlocked(true);
         setPostVerifyStep("NONE");
@@ -355,7 +362,7 @@ export default function LoginScreen({
       const st = await api.licenseStatus();
       if (st?.ok !== true) throw new Error("Lizenz nicht aktiv. Prüfe Admin-Code.");
       await AsyncStorage.setItem(modeScopedKey(COMPANY_NAME_KEY_BASE, m), cn);
-      await AsyncStorage.setItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m), code);
+      await AsyncStorage.removeItem(modeScopedKey(ADMIN_CODE_KEY_BASE, m)).catch(() => {});
       await AsyncStorage.setItem(modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, m), "1");
       setAdminUnlocked(true);
       setPostVerifyStep("NONE");
@@ -472,6 +479,11 @@ export default function LoginScreen({
     try {
       await AsyncStorage.multiRemove([modeScopedKey(ADMIN_UNLOCKED_KEY_BASE, mNow), modeScopedKey(ADMIN_CODE_KEY_BASE, mNow), modeScopedKey(COMPANY_NAME_KEY_BASE, mNow)]);
     } catch {}
+    if (mNow === "NUR_APP") {
+      try {
+        await SecureStore.deleteItemAsync(modeScopedKey(ADMIN_CODE_KEY_BASE, mNow));
+      } catch {}
+    }
     setAdminUnlocked(false);
     setCompanyName("");
     setAdminCode("");
@@ -647,13 +659,13 @@ export default function LoginScreen({
       const pw = password;
       if (!e.includes("@")) throw new Error("Bitte gültige E-Mail eingeben.");
       if (!name.trim()) throw new Error("Bitte Name eingeben.");
-      if (pw.trim().length < 6) throw new Error("Passwort muss mindestens 6 Zeichen haben.");
+      if (pw.trim().length < 8) throw new Error("Passwort muss mindestens 8 Zeichen haben.");
       if (isEmailVerified) {
         throw new Error("E-Mail ist bereits verifiziert. (Lokalen Benutzer zurücksetzen, falls nötig.)");
       }
+      await localRegister(e, pw);
       const u: LocalUser = {
         email: e,
-        passHash: passHash(e, pw),
         createdAt: Date.now()
       };
       await saveJson(KEY_LOCAL_USER, u);
@@ -733,11 +745,20 @@ export default function LoginScreen({
         throw new Error("E-Mail passt nicht zum lokalen Benutzer.");
       }
       if (!passwordOnly && !name.trim()) throw new Error("Bitte Name eingeben.");
-      const h = passHash(e, password);
-      if (h !== existing.passHash) throw new Error("Passwort falsch.");
+      try {
+        await localLogin(e, password);
+      } catch (secureError: any) {
+        // Migration from legacy LoginScreen password hash.
+        const legacy = String(existing.passHash || "");
+        if (!legacy || passHash(e, password) !== legacy) throw secureError;
+        await localRegister(e, password);
+        const migrated: LocalUser = { email: e, createdAt: existing.createdAt || Date.now() };
+        await saveJson(KEY_LOCAL_USER, migrated);
+        setLocalUser(migrated);
+      }
       await persistEmail(e);
       await persistProfile(e);
-      await setToken(`local:${existing.passHash}`);
+      await setToken(`local:${Crypto.randomUUID()}`);
       await patchAuthState({
         email: e,
         name: name.trim(),
@@ -772,6 +793,7 @@ export default function LoginScreen({
         try {
           setLoading(true);
           setErr(null);
+          await localDeleteAccount();
           await AsyncStorage.multiRemove([KEY_LOCAL_USER, KEY_LOCAL_VERIFY_EMAIL, KEY_LOCAL_VERIFY_HASH, KEY_LOCAL_VERIFY_TS, KEY_EMAIL_VERIFIED_AT, KEY_EMAIL_VERIFIED_FOR]);
           setLocalUser(null);
           setEmailVerifiedAt("");
@@ -1145,8 +1167,6 @@ export default function LoginScreen({
 
                     <Text style={s.label}>Admin-Code</Text>
                     <TextInput value={adminCode} onChangeText={setAdminCode} placeholder="Admin-Code" placeholderTextColor={COLORS.sub} autoCapitalize="characters" style={s.input} editable={!adminBusy && !loading} />
-
-                    {IS_DEV ? <Text style={s.mutedSmall}>TEST (Roberto): {TEST_ADMIN_CODE}</Text> : null}
 
                     <Pressable disabled={!canContinueFirmendaten || adminBusy || loading} onPress={async () => {
                   try {
