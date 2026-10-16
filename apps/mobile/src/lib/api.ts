@@ -2705,9 +2705,18 @@ export const api = {
 
     const photos = Array.isArray(row?.photos) ? row.photos : [];
     const attachments = Array.isArray(row?.attachments) ? row.attachments : [];
-    const all = [...attachments, ...photos].filter(Boolean);
+    const linePhotos = Array.isArray(row?.rows)
+      ? row.rows.flatMap((line: any) => Array.isArray(line?.photos) ? line.photos : []) : [];
+    const all = [...attachments, ...photos, ...linePhotos].filter(Boolean);
+    const seen = new Set<string>();
+    const unique = all.filter((f: any) => {
+      const uri = String(f?.uri || f?.url || f?.publicUrl || "").trim();
+      if (!uri || seen.has(uri)) return false;
+      seen.add(uri);
+      return true;
+    });
 
-    const { namedAll, localFiles, localByOrder } = buildNamedLocalFiles(all, "regie");
+    const { namedAll, localFiles, localByOrder } = buildNamedLocalFiles(unique, "regie");
 
     let uploadRes: any = null;
     if (localFiles.length) {
@@ -2718,10 +2727,8 @@ export const api = {
       ? uploadRes.files
       : [];
 
-    if (localFiles.length && !uploadedFiles.length) {
-      throw new Error(
-        "Regie Upload fehlgeschlagen: Server hat keine Dateien zurückgegeben."
-      );
+    if (localFiles.length && (uploadRes?.ok !== true || uploadedFiles.length !== localFiles.length)) {
+      throw new Error("REGIE_UPLOAD_INCOMPLETE");
     }
 
     const attachmentsFinal = namedAll.map((p: any) => {
@@ -2764,6 +2771,7 @@ export const api = {
     };
 
     const submitRes = await api.submitRegieInbox(projectKey, submitPayload);
+    if (submitRes?.ok !== true || !submitRes?.docId) throw new Error("REGIE_INBOX_NOT_CONFIRMED");
     return { ...submitRes, attachments: attachmentsFinal, uploadRes };
   },
 

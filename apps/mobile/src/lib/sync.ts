@@ -274,9 +274,12 @@ async function syncOne(item: QueueItem) {
   // REGIE
   // =========================
   if (item.kind === "REGIE") {
+    const raw: any = item.payload || {};
     const payload = {
-      ...(item.payload || {}),
-      projectId: pk, // server FS-key
+      ...(raw.row ?? raw),
+      projectId: pk,
+      projectCode: pk,
+      workflowStatus: "EINGEREICHT",
     };
     return (api as any).pushRegieToServer(pk, payload);
   }

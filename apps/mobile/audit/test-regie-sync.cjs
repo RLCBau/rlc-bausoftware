@@ -1,0 +1,8 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module'),ts=require('typescript');
+let accepted=false,seen=null;
+const item={id:'rg1',kind:'REGIE',projectId:'BA-2026-R',status:'PENDING',tries:0,payload:{row:{id:'reg1',date:'2026-10-16',rows:[{id:'line1',photos:[{uri:'file:///line.jpg'}]}],attachments:[{uri:'file:///main.jpg'}]}}};
+const queue={queueList:async()=>[{...item}],queueUpdate:async(id,patch)=>Object.assign(item,patch)};
+const api={api:{projects:async()=>[],pushRegieToServer:async(pk,row)=>{seen=row;return {ok:accepted,docId:'reg1'};}}};
+const file=path.resolve(__dirname,'../src/lib/sync.ts'),js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const m=new Module(file,module);m.filename=file;m.paths=Module._nodeModulePaths(path.dirname(file));m.require=name=>name==='./api'?api:name==='./offlineQueue'?queue:name==='./auth'?{getServerToken:async()=> 'test'}:require(name);m._compile(js,file);
+(async()=>{let r=await m.exports.syncAll();assert.equal(r.fail,1);assert.equal(item.status,'ERROR');assert.equal(seen.rows[0].photos.length,1);assert.equal(seen.attachments.length,1);assert.equal(seen.workflowStatus,'EINGEREICHT');item.nextTryAt=0;accepted=true;r=await m.exports.syncAll();assert.equal(r.ok,1);assert.equal(item.status,'DONE');console.log('PASS Regie queue: row photos preserved; false acknowledgement rejected; retry succeeds');})().catch(e=>{console.error(e);process.exitCode=1;});
