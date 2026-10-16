@@ -91,9 +91,18 @@ async function projectKeyForTarget(opts?: SyncOptions): Promise<string> {
  * - tutto (se opts non dato)
  * - SOLO un progetto (se opts.projectId o opts.projectCode dato)
  */
-export async function syncAll(
-  opts?: SyncOptions
-): Promise<{ ok: number; fail: number }> {
+let syncInFlight: Promise<{ ok: number; fail: number }> | null = null;
+
+/** Single-flight prevents concurrent screens from uploading the same queued attachment twice. */
+export function syncAll(opts?: SyncOptions): Promise<{ ok: number; fail: number }> {
+  if (syncInFlight) return syncInFlight.then(() => syncAll(opts));
+  const current = syncAllOnce(opts);
+  syncInFlight = current;
+  void current.finally(() => { if (syncInFlight === current) syncInFlight = null; }).catch(() => {});
+  return current;
+}
+
+async function syncAllOnce(opts?: SyncOptions): Promise<{ ok: number; fail: number }> {
   const list = await queueList();
   let ok = 0,
     fail = 0;
