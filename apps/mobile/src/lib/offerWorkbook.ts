@@ -5,6 +5,8 @@ export type ExcelRow = Record<string, unknown>;
 
 function escapeXml(value: unknown): string {
   return String(value ?? "")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
+    .slice(0, 32767)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -44,6 +46,9 @@ function sheetXml(rows: ExcelRow[]): string {
 
 /** Writes OOXML using inline strings only: no formula execution and no untrusted XLSX parser. */
 export function createOfferWorkbookBase64(positions: ExcelRow[], summary: ExcelRow[]): string {
+  if (positions.length > 50000 || summary.length > 50000) {
+    throw new Error("Excel-Export: zu viele Zeilen (Maximum 50.000 pro Blatt).");
+  }
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": strToU8(`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`),
     "_rels/.rels": strToU8(`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`),
