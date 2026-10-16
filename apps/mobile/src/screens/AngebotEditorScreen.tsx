@@ -4,7 +4,7 @@ import { View, Text, TextInput, Pressable, ScrollView, SafeAreaView, KeyboardAvo
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
-import * as XLSX from "xlsx";
+import { createOfferWorkbookBase64 } from "../lib/offerWorkbook";
 import { uploadProjectArtifactToDms } from "../lib/api";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -419,15 +419,7 @@ async function exportOfferExcel(params: {
     Feld: "Bemerkung",
     Wert: doc.note || ""
   }];
-  const wb = XLSX.utils.book_new();
-  const ws1 = XLSX.utils.json_to_sheet(rows);
-  const ws2 = XLSX.utils.json_to_sheet(summary);
-  XLSX.utils.book_append_sheet(wb, ws1, "Positionen");
-  XLSX.utils.book_append_sheet(wb, ws2, "Zusammenfassung");
-  const base64 = XLSX.write(wb, {
-    type: "base64",
-    bookType: "xlsx"
-  });
+  const base64 = createOfferWorkbookBase64(rows, summary);
   const fileName = `${doc.angebotNr || "angebot"}.xlsx`;
   const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
   await FileSystem.writeAsStringAsync(uri, base64, {

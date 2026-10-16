@@ -6,7 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
-import * as XLSX from "xlsx";
+import { createOfferWorkbookBase64 } from "../lib/offerWorkbook";
 import { uploadProjectArtifactToDms } from "../lib/api";
 import { RootStackParamList } from "../navigation/types";
 import { COLORS, createRlcStyles } from "../ui/theme";
@@ -294,13 +294,7 @@ async function exportOfferExcel(item: AngebotDoc) {
     Feld: "Bemerkung",
     Wert: item.note || ""
   }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Positionen");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "Zusammenfassung");
-  const base64 = XLSX.write(wb, {
-    type: "base64",
-    bookType: "xlsx"
-  });
+  const base64 = createOfferWorkbookBase64(rows, summary);
   const fileName = `${sanitizeFileName(item.angebotNr || item.angebotTitle || "angebot")}.xlsx`;
   const uri = `${FileSystem.cacheDirectory || FileSystem.documentDirectory}${fileName}`;
   await FileSystem.writeAsStringAsync(uri, base64, {
