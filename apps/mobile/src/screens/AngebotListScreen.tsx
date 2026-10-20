@@ -7,7 +7,8 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system/legacy";
 import { createOfferWorkbookBase64 } from "../lib/offerWorkbook";
-import { uploadProjectArtifactToDms } from "../lib/api";
+import { api, uploadProjectArtifactToDms } from "../lib/api";
+import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
 import { RootStackParamList } from "../navigation/types";
 import { COLORS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
@@ -23,6 +24,7 @@ type AngebotRow = {
 };
 type AngebotDoc = {
   id: string;
+  version?: number;
   projectId: string;
   projectCode: string;
   title?: string;
@@ -55,6 +57,7 @@ function normalizeStatus(v: any): AngebotStatus {
 function normalizeOfferDoc(input: any): AngebotDoc {
   return {
     id: String(input?.id || ""),
+    version: Number(input?.version || 0),
     projectId: String(input?.projectId || ""),
     projectCode: String(input?.projectCode || ""),
     title: input?.title ? String(input.title) : undefined,
@@ -344,16 +347,26 @@ export default function AngebotListScreen({
   const load = useCallback(async () => {
     try {
       setBusy(true);
-      const raw = await AsyncStorage.getItem(offerListKey(projectCode));
-      const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
-      const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc);
+      const mode = await AsyncStorage.getItem("rlc_mobile_mode");
+      let list: AngebotDoc[];
+      if (mode === "NUR_APP") {
+        const raw = await AsyncStorage.getItem(offerListKey(projectCode));
+        list = (Array.isArray(JSON.parse(raw || "[]")) ? JSON.parse(raw || "[]") : []).map(normalizeOfferDoc);
+      } else {
+        // SERVER_SYNC must read the authoritative project data, not stale AsyncStorage.
+        const serverItems = await api.getAngebote(projectCode);
+        if (!Array.isArray(serverItems)) throw new Error("ANGEBOTE_SERVER_LIST_INVALID");
+        list = serverItems.map(normalizeOfferDoc);
+      }
       list.sort((a, b) => {
         const ta = parseTime(a.updatedAt || a.createdAt);
         const tb = parseTime(b.updatedAt || b.createdAt);
         return tb - ta;
       });
       setItems(list);
-      await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(list));
+      if ((await AsyncStorage.getItem("rlc_mobile_mode")) === "NUR_APP") {
+        await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(list));
+      }
     } catch (e: any) {
       Alert.alert("Angebote", String(e?.message || "Angebote konnten nicht geladen werden"));
     } finally {
@@ -365,10 +378,20 @@ export default function AngebotListScreen({
   }, [load]));
   async function deleteItem(id: string) {
     try {
+      const mode = await AsyncStorage.getItem("rlc_mobile_mode");
+      if (mode !== "NUR_APP") {
+        const entry = items.find(x => x.id === id);
+        if (!entry) throw new Error("ANGEBOT_NOT_FOUND");
+        const version = Number((entry as any).version || 0);
+        if (!version) throw new Error("ANGEBOT_VERSION_MISSING: Dokument erneut vom Server laden.");
+        const removed = await api.deleteAngebot(projectCode, id, version);
+        if (removed?.ok !== true) throw new Error("ANGEBOT_DELETE_NOT_CONFIRMED");
+        await load();
+        return;
+      }
       const raw = await AsyncStorage.getItem(offerListKey(projectCode));
       const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
-      const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc);
-      const next = list.filter(x => x.id !== id);
+      const next = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc).filter(x => x.id !== id);
       await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(next));
       setItems(next);
     } catch (e: any) {
@@ -393,16 +416,25 @@ export default function AngebotListScreen({
       if (!pdfUri) {
         throw new Error("PDF wurde erstellt, aber kein pdfUri zurückgegeben.");
       }
-      const raw = await AsyncStorage.getItem(offerListKey(projectCode));
-      const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
-      const list = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc);
-      const next = list.map(x => String(x.id) === String(item.id) ? {
-        ...x,
-        pdfUri,
-        updatedAt: new Date().toISOString()
-      } as any : x);
-      await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(next));
-      setItems(next);
+      const updated = { ...item, pdfUri, updatedAt: new Date().toISOString() } as any;
+      if ((await AsyncStorage.getItem("rlc_mobile_mode")) !== "NUR_APP") {
+        // Same authoritative flow as AngebotEditor: persist -> submit -> server ACK.
+        const saved = await api.saveAngebot(projectCode, { ...updated, baseVersion: Number(item.version || 0) });
+        if (saved?.ok !== true || !saved?.document?.id) throw new Error("ANGEBOT_SERVER_SAVE_NOT_CONFIRMED");
+        await submitToEingangPruefung({
+          type: "ANGEBOT", projectKey: projectCode, projectId, projectCode,
+          title: updated.angebotTitle || updated.angebotNr || "Angebot",
+          doc: saved.document, pdfUri, status: "EINGEREICHT", sourceScreen: "AngebotList"
+        });
+        await load();
+      } else {
+        const raw = await AsyncStorage.getItem(offerListKey(projectCode));
+        const listRaw: AngebotDoc[] = raw ? JSON.parse(raw) : [];
+        const next = (Array.isArray(listRaw) ? listRaw : []).map(normalizeOfferDoc)
+          .map(x => String(x.id) === String(item.id) ? updated : x);
+        await AsyncStorage.setItem(offerListKey(projectCode), JSON.stringify(next));
+        setItems(next);
+      }
       navigation.navigate("PdfViewer", {
         uri: pdfUri,
         title: item.angebotTitle || item.angebotNr || "Angebot",

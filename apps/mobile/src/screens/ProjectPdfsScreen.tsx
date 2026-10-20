@@ -194,7 +194,13 @@ export default function ProjectPdfsScreen({
           busy: false
         });
       }
-      setRows(mapped);
+      // Keep the newest server export of each PDF; older revisions stay archived.
+      const newest = new Map<string, Row>();
+      for (const pdf of mapped) {
+        const previous = newest.get(pdf.name);
+        if (!previous || String(pdf.mtime || "") > String(previous.mtime || "")) newest.set(pdf.name, pdf);
+      }
+      setRows(Array.from(newest.values()).sort((a, b) => String(b.mtime || "").localeCompare(String(a.mtime || ""))));
     } catch (e: any) {
       setLastError(e?.message || "PDF-Liste fehlgeschlagen.");
       await loadOffline();
@@ -401,7 +407,7 @@ export default function ProjectPdfsScreen({
                   <Text style={s.sub} numberOfLines={2}>
                     {r.folder ? `${r.folder}` : ""}
                     {r.folder && r.mtime ? " • " : ""}
-                    {r.mtime ? String(r.mtime) : ""}
+                    {r.mtime ? new Date(r.mtime).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : ""}
                   </Text>
                 </Pressable>
 

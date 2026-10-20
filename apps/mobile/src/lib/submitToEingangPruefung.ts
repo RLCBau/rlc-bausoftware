@@ -1,6 +1,6 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { queueAdd } from "./offlineQueue";
+import { queueAdd, queueList } from "./offlineQueue";
 import { syncAll } from "./sync";
 
 export type EingangDocType =
@@ -121,16 +121,19 @@ export async function submitToEingangPruefung(params: {
 
   if (modeRaw !== "NUR_APP") {
     const kind = type === "FOTO" ? "PHOTO_NOTE" : type;
-    await queueAdd({
+    const queued = await queueAdd({
       kind: kind as any,
       projectId: projectKey,
       payload: { row },
     } as any);
 
-    // Best effort: senza rete il documento rimane PENDING nella coda.
-    try {
-      await syncAll({ projectCode: projectKey });
-    } catch {}
+    // Saving locally or queueing is NOT proof of server submission.
+    // Only report success when the exact queued document has a positive server ACK.
+    await syncAll({ projectCode: projectKey });
+    const confirmed = (await queueList()).find(item => item.id === queued.id);
+    if (confirmed?.status !== "DONE" || (confirmed.result as any)?.ok !== true) {
+      throw new Error("Eingangsprüfung: Serverübertragung nicht bestätigt. Dokument bleibt in der Synchronisierungswarteschlange.");
+    }
     return row;
   }
 

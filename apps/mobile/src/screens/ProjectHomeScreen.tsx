@@ -419,6 +419,16 @@ export default function ProjectHomeScreen({
     if (/^https?:\/\//i.test(u)) return u;
     return `${String(base || "").replace(/\/$/, "")}${u.startsWith("/") ? "" : "/"}${u}`;
   }
+  // Never reuse an offline PDF with the same filename from an older export.
+  const pdfCacheName = (item: ProjectPdfItem) => {
+    const stem = String(item.name || "document.pdf").replace(/\.pdf$/i, "").slice(0, 100);
+    const revision = String(item.mtime || item.url || "").replace(/[^a-zA-Z0-9]/g, "_").slice(-45);
+    return `${stem}_${revision || "current"}.pdf`;
+  };
+  const pdfDisplayDate = (value?: string) => {
+    const d = new Date(String(value || ""));
+    return Number.isNaN(d.getTime()) ? String(value || "") : d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+  };
   const pdfRows = useMemo(() => {
     return pdfItems.map(it => ({
       ...it,
@@ -431,7 +441,7 @@ export default function ProjectHomeScreen({
     try {
       const flags: Record<string, boolean> = {};
       for (const it of items) {
-        flags[it.name] = await isDownloaded(fsKey, it.name);
+        flags[it.name] = await isDownloaded(fsKey, pdfCacheName(it));
       }
       setPdfOfflineMap(flags);
     } catch {}
@@ -487,8 +497,15 @@ export default function ProjectHomeScreen({
         folder: String(x?.folder || "").trim() || undefined,
         mtime: String(x?.mtime || x?.savedAt || "").trim() || undefined
       })).filter((x: any) => !!x.name && !!x.url);
-      setPdfItems(normalized);
-      await refreshOfflineFlags(fsKey, normalized);
+      // The archive keeps every historical export; the Mobile overview shows the newest revision only.
+      const newest = new Map<string, ProjectPdfItem>();
+      for (const pdf of normalized) {
+        const current = newest.get(pdf.name);
+        if (!current || String(pdf.mtime || "") > String(current.mtime || "")) newest.set(pdf.name, pdf);
+      }
+      const currentPdfs = Array.from(newest.values()).sort((a, b) => String(b.mtime || "").localeCompare(String(a.mtime || "")));
+      setPdfItems(currentPdfs);
+      await refreshOfflineFlags(fsKey, currentPdfs);
       setPdfOpen(true);
     } catch (e: any) {
       console.error("openProjectPdfs ERROR:", e);
@@ -508,7 +525,7 @@ export default function ProjectHomeScreen({
       const fsKey = (await requireFsCode()) || (await resolveProjectCodeNow()) || String(projectKey).trim();
       if (mode === "NUR_APP") {
         const localKey = (await requireOfflineFsKey()) || String(projectKey).trim();
-        const local = await getLocalUri(localKey, item.name);
+        const local = await getLocalUri(localKey, pdfCacheName(item));
         if (local) {
           try {
             navigation.navigate("PdfViewer" as any, {
@@ -525,7 +542,7 @@ export default function ProjectHomeScreen({
         }
         throw new Error("Offline: PDF nicht gefunden. Bitte zuerst herunterladen (SERVER_SYNC) oder in NUR_APP laden.");
       }
-      const local = await getLocalUri(fsKey, item.name);
+      const local = await getLocalUri(fsKey, pdfCacheName(item));
       if (local) {
         try {
           navigation.navigate("PdfViewer" as any, {
@@ -543,7 +560,7 @@ export default function ProjectHomeScreen({
       const base = await getBaseUrl();
       const url = absUrl(base, item.url);
       if (!url) throw new Error("PDF URL fehlt");
-      const downloaded = await downloadPdf(fsKey, item.name, url);
+      const downloaded = await downloadPdf(fsKey, pdfCacheName(item), url);
       setPdfOfflineMap(prev => ({ ...prev, [item.name]: true }));
       navigation.navigate("PdfViewer" as any, { uri: downloaded, title: item.name });
     } catch (e: any) {
@@ -558,7 +575,7 @@ export default function ProjectHomeScreen({
       const base = await getBaseUrl();
       const url = absUrl(base, item.url);
       if (!url) throw new Error("PDF URL fehlt");
-      await downloadPdf(fsKey, item.name, url);
+      await downloadPdf(fsKey, pdfCacheName(item), url);
       setPdfOfflineMap(prev => ({
         ...prev,
         [item.name]: true
@@ -574,7 +591,7 @@ export default function ProjectHomeScreen({
     if (!fsKey) return;
     setItemBusy(item.name, true);
     try {
-      await deletePdf(fsKey, item.name);
+      await deletePdf(fsKey, pdfCacheName(item));
       setPdfOfflineMap(prev => ({
         ...prev,
         [item.name]: false
@@ -1087,10 +1104,10 @@ export default function ProjectHomeScreen({
                   const busy = !!item.busy;
                   return <View style={s.pdfItemRow}>
                           <Pressable style={s.pdfItem} onPress={() => openPdfItem(item)}>
-                            <Text style={s.pdfItemName}>{item.name}</Text>
+                            <Text style={s.pdfItemName} numberOfLines={2}>{item.name}</Text>
                             <Text style={s.pdfItemMeta}>
                               {item.folder ? `${item.folder} • ` : ""}
-                              {item.mtime ? item.mtime : "Server"}
+                              {item.mtime ? pdfDisplayDate(item.mtime) : "Server"}
                             </Text>
                           </Pressable>
 
@@ -1585,9 +1602,9 @@ const s = createRlcStyles("ProjectHomeScreen", {
     color: COLORS.text
   },
   pdfItemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 10,
     borderRadius: 14,
@@ -1597,6 +1614,7 @@ const s = createRlcStyles("ProjectHomeScreen", {
   },
   pdfItem: {
     flex: 1,
+    minWidth: 0,
     borderWidth: 1,
     borderColor: COLORS.border,
     backgroundColor: COLORS.inputBg,
@@ -1619,6 +1637,7 @@ const s = createRlcStyles("ProjectHomeScreen", {
   pdfActions: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "flex-end",
     gap: 8
   },
   btnPrimarySmall: {
