@@ -50,7 +50,12 @@ function canLvRead(role?: SessionRole) {
 }
 function toNum(v: any): number | undefined {
   if (v === null || v === undefined || v === "") return undefined;
-  const normalized = String(v).replace(",", ".").trim();
+  const raw = String(v).trim().replace(/\s/g, "");
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : undefined;
 }

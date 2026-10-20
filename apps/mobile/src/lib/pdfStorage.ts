@@ -1,4 +1,4 @@
-﻿// apps/mobile/src/lib/pdfStorage.ts
+// apps/mobile/src/lib/pdfStorage.ts
 
 /**
  * Offline PDF storage (ROBUST for Expo SDK 54+)
@@ -19,6 +19,7 @@
 
 import * as LegacyFS from "expo-file-system/legacy";
 import * as FS from "expo-file-system";
+import { getServerToken } from "./auth";
 
 /* ============================================================
  * Helpers
@@ -306,13 +307,27 @@ export async function downloadPdf(
     await LegacyFS.deleteAsync(target, { idempotent: true });
   } catch {}
 
-  const dl = LegacyFS.createDownloadResumable(url, target, {});
+  const token = String(await getServerToken()).trim();
+  if (!token || token.startsWith("local:")) throw new Error("Server-Anmeldung für PDF-Download erforderlich.");
+  const dl = LegacyFS.createDownloadResumable(url, target, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/pdf" },
+  });
   const res = await dl.downloadAsync();
-
   const savedUri = String((res as any)?.uri || target);
+  const status = Number((res as any)?.status || 0);
+  // Read only the PDF signature, never base64-encode an entire large project PDF.
+  // Reading complete 100+ MB PDFs here can exhaust iOS memory.
+  const signature = await LegacyFS.readAsStringAsync(savedUri, {
+    encoding: LegacyFS.EncodingType.Base64,
+    position: 0,
+    length: 5,
+  }).catch(() => "");
+  if (status !== 200 || !signature.startsWith("JVBERi0")) {
+    await LegacyFS.deleteAsync(savedUri, { idempotent: true }).catch(() => {});
+    throw new Error(`PDF-Download ungültig (HTTP ${status || "unbekannt"}). Bitte Server-Anmeldung prüfen.`);
+  }
   const info = await infoIfFile(savedUri);
   if (!info) throw new Error("Download fehlgeschlagen (Datei nicht vorhanden)");
-
   return savedUri;
 }
 

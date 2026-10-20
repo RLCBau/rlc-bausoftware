@@ -1,4 +1,4 @@
-// apps/mobile/src/screens/RechnungEditorScreen.tsx
+﻿// apps/mobile/src/screens/RechnungEditorScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, SafeAreaView, Alert, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -32,11 +32,24 @@ type AbschlagItem = {
   pdfUri?: string;
   createdAt: number;
 };
+function localDocumentDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 function num(v: string | number | null | undefined) {
-  return Number(String(v ?? "").replace(",", ".") || 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v ?? "").trim().replace(/\s/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 function money(v: number) {
   return Number(v || 0).toLocaleString("de-DE", {
@@ -61,7 +74,7 @@ function normalizeAbschlag(a: any, idx: number): AbschlagItem {
   return {
     id: String(a?.id || makeId()),
     nummer: Number(a?.nummer || idx + 1),
-    datum: String(a?.datum || new Date().toISOString().slice(0, 10)),
+    datum: String(a?.datum || localDocumentDate()),
     betrag: Number(a?.betrag || 0),
     prozent: a?.prozent === null || a?.prozent === undefined ? undefined : Number(a.prozent || 0),
     note: String(a?.note || ""),
@@ -87,7 +100,7 @@ function createEmptyDoc(params: {
     mengenTitle: "",
     rechnungFromMengen: !!params.fromMengen,
     rechnungNr: `RE-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`,
-    datum: new Date().toISOString().slice(0, 10),
+    datum: localDocumentDate(),
     leistungszeitraum: "",
     customerName: "",
     address: "",
@@ -138,7 +151,7 @@ function normalizeAngebotToRechnung(a: any, prev: any) {
     address: String(a?.customerAddress || a?.address || a?.kundeAdresse || ""),
     email: String(a?.customerEmail || a?.email || ""),
     phone: String(a?.customerPhone || a?.phone || ""),
-    mwstPct: String(a?.mwstPct || a?.vatPct || prev?.mwstPct || "19"),
+    mwstPct: String(a?.mwstPct ?? a?.vatPct ?? prev?.mwstPct ?? "19"),
     note: String(prev?.note || "").trim() || "Automatisch aus Angebot übernommen.",
     rows
   };
@@ -171,7 +184,7 @@ function calcNettoFromRows(rows: any[]) {
 }
 function calcMwstFromDoc(d: any) {
   const netto = calcNettoFromRows(d?.rows || []);
-  return netto * num(d?.mwstPct || "19") / 100;
+  return netto * num(d?.mwstPct ?? "19") / 100;
 }
 function calcBruttoFromDoc(d: any) {
   const netto = calcNettoFromRows(d?.rows || []);
@@ -229,7 +242,7 @@ function normalizeStoredRechnung(input: any, params: {
     mengenTitle: String(input?.mengenTitle || ""),
     rechnungFromMengen: !!input?.rechnungFromMengen,
     rechnungNr: String(input?.rechnungNr || ""),
-    datum: String(input?.datum || new Date().toISOString().slice(0, 10)),
+    datum: String(input?.datum || localDocumentDate()),
     leistungszeitraum: String(input?.leistungszeitraum || ""),
     customerName: String(input?.customerName || ""),
     address: String(input?.address || ""),
@@ -242,7 +255,7 @@ function normalizeStoredRechnung(input: any, params: {
     steuerNr: String(input?.steuerNr || ""),
     ustId: String(input?.ustId || ""),
     zahlungsziel: String(input?.zahlungsziel || "14 Tage"),
-    mwstPct: String(input?.mwstPct || "19"),
+    mwstPct: String(input?.mwstPct ?? "19"),
     note: String(input?.note || ""),
     pdfUri: String(input?.pdfUri || ""),
     updatedAt: Number(input?.updatedAt || Date.now()),
@@ -724,13 +737,13 @@ export default function RechnungEditorScreen({
         return {
           ...prev,
           rechnungNr: parsed.rechnungNr || prev.rechnungNr,
-          datum: parsed.datum || prev.datum || new Date().toISOString().slice(0, 10),
+          datum: parsed.datum || prev.datum || localDocumentDate(),
           leistungszeitraum: parsed.leistungszeitraum || prev.leistungszeitraum,
           customerName: parsed.customerName || prev.customerName,
           address: parsed.address || prev.address,
           email: parsed.email || prev.email,
           phone: parsed.phone || prev.phone,
-          mwstPct: prev?.mwstPct || "19",
+          mwstPct: prev?.mwstPct ?? "19",
           note: parsed.warnings?.length ? `${parsed.note || ""}
 
 RLC KI Hinweise:
@@ -768,7 +781,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
     const tempDoc = {
       ...base,
       rows: normalizedRows,
-      mwstPct: String(base?.mwstPct || "19").trim()
+      mwstPct: String(base?.mwstPct ?? "19").trim()
     };
     const calcNetto = calcNettoFromRows(tempDoc.rows);
     const calcMwst = calcMwstFromDoc(tempDoc);
@@ -927,7 +940,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         projectCode: saved.projectCode || projectCode,
         fileName: `${fileNameBase}.pdf`,
         title: "RECHNUNG",
-        subTitle: saved.sourceType === "MENGEN" ? "Erstellt aus Mengenermittlung" : saved.sourceType === "ANGEBOT" ? "Erstellt aus Angebot" : "Freie Rechnung",
+        subTitle: `ENTWURF – ${saved.sourceType === "MENGEN" ? "Erstellt aus Mengenermittlung" : saved.sourceType === "ANGEBOT" ? "Erstellt aus Angebot" : "Freie Rechnung"}`,
         docNo: saved.rechnungNr || "",
         date: saved.datum || "",
         period: saved.leistungszeitraum || "",
@@ -940,7 +953,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         rows: buildPdfRows(saved.rows || []),
         totals: {
           netto: Number(saved?.netto || 0),
-          mwstPct: num(saved?.mwstPct || "19"),
+          mwstPct: num(saved?.mwstPct ?? "19"),
           mwstValue: Number(saved?.mwst || 0),
           brutto: Number(saved?.brutto || 0)
         },
@@ -992,7 +1005,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         projectCode: saved.projectCode || projectCode,
         fileName: `${fileNameBase}_schlussrechnung.pdf`,
         title: "SCHLUSSRECHNUNG",
-        subTitle: (saved.abschlaege || []).length > 0 ? "Restbetrag nach Abschlägen" : "Schlussbetrag",
+        subTitle: `ENTWURF – ${(saved.abschlaege || []).length > 0 ? "Restbetrag nach Abschlägen" : "Schlussbetrag"}`,
         docNo: saved.rechnungNr || "",
         date: saved.datum || "",
         period: saved.leistungszeitraum || "",
@@ -1005,7 +1018,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         rows: buildPdfRows(saved.rows || []),
         totals: {
           netto: Number(saved?.netto || 0),
-          mwstPct: num(saved?.mwstPct || "19"),
+          mwstPct: num(saved?.mwstPct ?? "19"),
           mwstValue: Number(saved?.mwst || 0),
           bezahlt: bezahlt,
           rest: finalRest,
@@ -1098,7 +1111,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         projectCode: saved.projectCode || projectCode,
         fileName: `${fileNameBase}.pdf`,
         title: "ABSCHLAGSRECHNUNG",
-        subTitle: `Abschlag Nr. ${item.nummer}`,
+        subTitle: `ENTWURF – Abschlag Nr. ${item.nummer}`,
         docNo: saved.rechnungNr || "",
         date: item.datum || "",
         period: saved.leistungszeitraum || "",
@@ -1182,7 +1195,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       const nextItem: AbschlagItem = {
         id: makeId(),
         nummer: (doc.abschlaege?.length || 0) + 1,
-        datum: new Date().toISOString().slice(0, 10),
+        datum: localDocumentDate(),
         betrag,
         prozent,
         note: abschlagNoteInput.trim(),

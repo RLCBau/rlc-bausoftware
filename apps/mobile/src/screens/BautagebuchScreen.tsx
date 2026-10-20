@@ -13,6 +13,10 @@ import { buildBautagebuchPdf, type BautagebuchRow } from "../lib/exporters/bauta
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
 type Props = NativeStackScreenProps<RootStackParamList, "Bautagebuch">;
 const KEY = "rlc_tagesbericht_list:";
+const localYmd = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 export default function BautagebuchScreen({
   route,
   navigation
@@ -131,6 +135,8 @@ export default function BautagebuchScreen({
         rows,
         filenameHint: `Bautagebuch_${projectKey}`
       });
+      const pdfUri = String((result as any)?.pdfUri || (result as any)?.uri || "").trim();
+      if (!pdfUri) throw new Error("PDF wurde erstellt, aber kein Dateipfad zurückgegeben.");
       await submitToEingangPruefung({
         type: "BAUTAGEBUCH",
         projectKey,
@@ -143,7 +149,7 @@ export default function BautagebuchScreen({
           kind: "bautagebuch",
           projectId: String(projectId || projectKey),
           projectCode: String(projectCode || projectKey),
-          date: new Date().toISOString().slice(0, 10),
+          date: localYmd(),
           monthLabel: "Gesamt",
           totalReports: rows.length,
           rows
@@ -152,8 +158,6 @@ export default function BautagebuchScreen({
         status: "EINGEREICHT",
         sourceScreen: "Bautagebuch"
       });
-      const pdfUri = String((result as any)?.pdfUri || (result as any)?.uri || "").trim();
-      if (!pdfUri) throw new Error("PDF wurde erstellt, aber kein Dateipfad zurückgegeben.");
       navigation.navigate("PdfViewer", {
         uri: pdfUri,
         title: `Bautagebuch ${projectKey}`,
@@ -171,6 +175,10 @@ export default function BautagebuchScreen({
     try {
       setSaveBusy(true);
       const rows = await loadTagesberichte();
+      if (!rows.length) {
+        Alert.alert("Bautagebuch", "Keine Tagesberichte vorhanden. Bitte zuerst einen Tagesbericht erfassen.");
+        return;
+      }
       await submitToEingangPruefung({
         type: "BAUTAGEBUCH",
         projectKey,
@@ -204,7 +212,11 @@ export default function BautagebuchScreen({
         Alert.alert("Bautagebuch CSV", "Für dieses Projekt sind noch keine Tagesberichte vorhanden.");
         return;
       }
-      const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const esc = (v: any) => {
+        const value = String(v ?? "");
+        const safe = /^[\s]*[=+\-@]/.test(value) ? `\'${value}` : value;
+        return `"${safe.replace(/"/g, '""')}"`;
+      };
       const header = ["Datum", "Wetter", "Arbeiten", "Personal", "Maschinen", "Probleme"].map(esc).join(";");
       const body = rows.map((r: any) => [r.date || r.datum || "", r.weather || r.wetter || "", r.workDone || r.arbeiten || "", r.workers || r.personal || "", r.machines || r.maschinen || "", r.issues || r.probleme || ""].map(esc).join(";"));
       const csv = [header, ...body].join("\n");
@@ -212,16 +224,19 @@ export default function BautagebuchScreen({
       await FileSystem.writeAsStringAsync(uri, csv, {
         encoding: FileSystem.EncodingType.UTF8
       });
-      try {
-        await uploadProjectArtifactToDms({
-          projectIdOrCode: projectId || projectKey,
-          fileUri: uri,
-          fileName: `Bautagebuch_${projectKey}.csv`,
-          mimeType: "text/csv;charset=utf-8",
-          module: "BAUTAGEBUCH",
-        });
-      } catch (error) {
-        console.warn("[bautagebuch:csv:dms]", error);
+      const csvMode = await AsyncStorage.getItem("rlc_mobile_mode");
+      if (csvMode !== "NUR_APP") {
+        try {
+          await uploadProjectArtifactToDms({
+            projectIdOrCode: projectId || projectKey,
+            fileUri: uri,
+            fileName: `Bautagebuch_${projectKey}.csv`,
+            mimeType: "text/csv;charset=utf-8",
+            module: "BAUTAGEBUCH",
+          });
+        } catch (error) {
+          console.warn("[bautagebuch:csv:dms] Upload fehlgeschlagen");
+        }
       }
 
       if (await Sharing.isAvailableAsync()) {

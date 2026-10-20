@@ -1,0 +1,13 @@
+const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),ts=require("typescript");
+const source=fs.readFileSync(path.resolve(__dirname,"../src/lib/mobilePdfCore.ts"),"utf8");
+const match=source.match(/function validatePdfBase64\(base64: string\): string \{[\s\S]*?\n\}/);
+assert(match,"signature validation absent");
+const compiled=ts.transpileModule(match[0],{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;
+const fn=new Function(compiled+";return validatePdfBase64;")();
+const minimal=Buffer.from("%PDF-1.7\n1 0 obj","utf8").toString("base64");
+assert.equal(fn(minimal),minimal);
+assert.equal(fn("data:application/pdf;base64,"+minimal),minimal);
+for(const invalid of ["",Buffer.from("<html>Error</html>").toString("base64"),Buffer.from('{"error":"bad"}').toString("base64")])assert.throws(()=>fn(invalid),/Dateisignatur/);
+assert.match(source,/validatePdfBase64\(downloadedBase64\)/);
+assert.match(source,/bytes\.subarray\(0, 5\)/);
+console.log("PASS PDF signature: valid PDF, HTML/JSON rejection, binary and download branches");

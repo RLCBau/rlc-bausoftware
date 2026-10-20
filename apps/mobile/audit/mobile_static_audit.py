@@ -1,7 +1,7 @@
 from pathlib import Path
 import re, json, hashlib, datetime
 
-root = Path(r"C:\RLC\rlc-app\apps\mobile")
+root = Path(__file__).resolve().parent.parent
 src = root / "src"
 files = sorted([p for p in src.rglob("*") if p.suffix in {".ts",".tsx"}])
 api_file = src / "lib" / "api.ts"

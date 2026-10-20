@@ -1,19 +1,19 @@
 {
   "summary": {
-    "generated": "2026-10-16T13:31:36.423340",
-    "files_scanned": 82,
-    "lines_scanned": 53155,
+    "generated": "2026-10-17T13:13:49.627950",
+    "files_scanned": 85,
+    "lines_scanned": 53503,
     "routes_declared": 40,
     "routes_used": 35,
     "undeclared_routes": [],
-    "api_members_used": 56,
+    "api_members_used": 59,
     "api_members_unresolved": [
       "rlcbausoftware"
     ],
     "direct_fetch_files": [
       [
         "src/lib/auth.ts",
-        1
+        2
       ],
       [
         "src/lib/companyCache.ts",
@@ -72,6 +72,42 @@
       [
         "src/lib/auth.ts",
         "http://localhost:4000"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/package/2006/content-types"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/package/2006/relationships"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/package/2006/relationships"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
       ]
     ],
     "asyncstorage_sensitive_refs": [
@@ -82,14 +118,6 @@
       [
         "src/lib/auth.ts",
         "AsyncStorage.getItem(AUTH_MODE_KEY);"
-      ],
-      [
-        "src/lib/auth.ts",
-        "AsyncStorage.setItem(TOKEN_KEY, t);"
-      ],
-      [
-        "src/lib/auth.ts",
-        "AsyncStorage.setItem(SERVER_TOKEN_KEY, t);"
       ],
       [
         "src/lib/auth.ts",
@@ -107,6 +135,10 @@
     "console_log_files": [
       [
         "src/lib/api.ts",
+        1
+      ],
+      [
+        "src/lib/auth.ts",
         1
       ],
       [
@@ -150,10 +182,6 @@
         3
       ],
       [
-        "src/screens/LoginScreen.tsx",
-        3
-      ],
-      [
         "src/screens/MengenEditorScreen.tsx",
         6
       ],
@@ -163,7 +191,7 @@
       ],
       [
         "src/screens/PhotosNotesScreen.tsx",
-        4
+        1
       ],
       [
         "src/screens/ProjectHomeScreen.tsx",
@@ -176,10 +204,6 @@
       [
         "src/screens/SchlussrechnungScreen.tsx",
         3
-      ],
-      [
-        "src/screens/TagesberichtEditorScreen.tsx",
-        1
       ]
     ],
     "todo_files": [
@@ -248,6 +272,12 @@
         ]
       ],
       [
+        "src/lib/exportStorage.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
         "src/lib/exporters/bautagebuchPdfBuilder.ts",
         [
           "FileSystem",
@@ -296,12 +326,6 @@
           "FileSystem",
           "Sharing",
           "Print"
-        ]
-      ],
-      [
-        "src/lib/exportStorage.ts",
-        [
-          "FileSystem"
         ]
       ],
       [
@@ -520,8 +544,8 @@
     },
     {
       "file": "src/lib/api.ts",
-      "lines": 3417,
-      "sha16": "e7745f4582fed6f0",
+      "lines": 3422,
+      "sha16": "4930e443e9ab35f8",
       "flags": [
         "API_UNRESOLVED:rlcbausoftware",
         "CONSOLE:1",
@@ -537,13 +561,20 @@
     },
     {
       "file": "src/lib/auth.ts",
-      "lines": 382,
-      "sha16": "65f36fad9af2535c",
+      "lines": 405,
+      "sha16": "a0e92a5c7f3537ad",
       "flags": [
-        "DIRECT_FETCH:1",
+        "DIRECT_FETCH:2",
         "HTTP_LITERAL",
+        "CONSOLE:1",
         "DEVICE_API:SecureStore"
       ]
+    },
+    {
+      "file": "src/lib/autoSync.ts",
+      "lines": 21,
+      "sha16": "48dfc3963d090e95",
+      "flags": []
     },
     {
       "file": "src/lib/companyBundle.ts",
@@ -569,6 +600,14 @@
       "flags": []
     },
     {
+      "file": "src/lib/exportStorage.ts",
+      "lines": 160,
+      "sha16": "9c32baa7a078f3ff",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
       "file": "src/lib/exporters/bautagebuchPdfBuilder.ts",
       "lines": 587,
       "sha16": "3caf1495f5f93c0d",
@@ -587,8 +626,8 @@
     },
     {
       "file": "src/lib/exporters/documentPdfBuilder.ts",
-      "lines": 827,
-      "sha16": "f98b3f3c94fd12c6",
+      "lines": 836,
+      "sha16": "f98f983dff6a281c",
       "flags": [
         "CONSOLE:1",
         "TODO:1",
@@ -637,12 +676,10 @@
       ]
     },
     {
-      "file": "src/lib/exportStorage.ts",
-      "lines": 160,
-      "sha16": "9c32baa7a078f3ff",
-      "flags": [
-        "DEVICE_API:FileSystem"
-      ]
+      "file": "src/lib/fiscalInvoice.ts",
+      "lines": 58,
+      "sha16": "8af487d79e87ed2a",
+      "flags": []
     },
     {
       "file": "src/lib/fsDirs.ts",
@@ -686,17 +723,25 @@
     },
     {
       "file": "src/lib/mobilePdfCore.ts",
-      "lines": 262,
-      "sha16": "5b9591b5fa1114cd",
+      "lines": 274,
+      "sha16": "f99eac96d55085bf",
       "flags": [
         "DIRECT_FETCH:1",
         "DEVICE_API:FileSystem"
       ]
     },
     {
+      "file": "src/lib/offerWorkbook.ts",
+      "lines": 62,
+      "sha16": "99b90b1535b21a4c",
+      "flags": [
+        "HTTP_LITERAL"
+      ]
+    },
+    {
       "file": "src/lib/offlineQueue.ts",
-      "lines": 687,
-      "sha16": "fc55597fc2fb23f3",
+      "lines": 702,
+      "sha16": "3e70a349446e5f32",
       "flags": []
     },
     {
@@ -752,7 +797,7 @@
     {
       "file": "src/lib/storage.ts",
       "lines": 302,
-      "sha16": "73abea844e008d53",
+      "sha16": "0965f12e1b3a1fcd",
       "flags": [
         "DEVICE_API:FileSystem"
       ]
@@ -771,8 +816,8 @@
     },
     {
       "file": "src/lib/sync.ts",
-      "lines": 475,
-      "sha16": "122ed246657b5c4d",
+      "lines": 460,
+      "sha16": "767e57e2630cf5a9",
       "flags": [
         "DIRECT_FETCH:1"
       ]
@@ -785,8 +830,8 @@
     },
     {
       "file": "src/screens/AbschlagEditorScreen.tsx",
-      "lines": 640,
-      "sha16": "5b9fce388e0b5781",
+      "lines": 653,
+      "sha16": "381b4fbbaba129c3",
       "flags": [
         "CONSOLE:4"
       ]
@@ -799,8 +844,8 @@
     },
     {
       "file": "src/screens/AngebotEditorScreen.tsx",
-      "lines": 1411,
-      "sha16": "d095e89287a945d9",
+      "lines": 1428,
+      "sha16": "54ce0f20c79f07ae",
       "flags": [
         "CONSOLE:2",
         "DEVICE_API:FileSystem,Sharing"
@@ -808,8 +853,8 @@
     },
     {
       "file": "src/screens/AngebotListScreen.tsx",
-      "lines": 992,
-      "sha16": "8ff5053553e4160d",
+      "lines": 986,
+      "sha16": "b8cf64a84e2402c7",
       "flags": [
         "CONSOLE:1",
         "DEVICE_API:FileSystem,Sharing"
@@ -829,16 +874,16 @@
     },
     {
       "file": "src/screens/ArbeitszeitenScreen.tsx",
-      "lines": 692,
-      "sha16": "be9696d3f16e4efc",
+      "lines": 712,
+      "sha16": "00f9e2c0998cb7c3",
       "flags": [
         "DEVICE_API:Location"
       ]
     },
     {
       "file": "src/screens/BautagebuchScreen.tsx",
-      "lines": 622,
-      "sha16": "ede7a316c4ebc617",
+      "lines": 637,
+      "sha16": "d7d20ef604564c2f",
       "flags": [
         "CONSOLE:1",
         "DEVICE_API:FileSystem,Sharing"
@@ -919,8 +964,8 @@
     },
     {
       "file": "src/screens/LieferscheinScreen.tsx",
-      "lines": 2015,
-      "sha16": "59c41957d8d76bbd",
+      "lines": 2014,
+      "sha16": "a37c2bf13d19569a",
       "flags": [
         "CONSOLE:3",
         "DEVICE_API:Camera,ImagePicker,DocumentPicker,FileSystem"
@@ -928,18 +973,17 @@
     },
     {
       "file": "src/screens/LoginScreen.tsx",
-      "lines": 2049,
-      "sha16": "c4217d2805f06660",
+      "lines": 1966,
+      "sha16": "f448cda3561172f3",
       "flags": [
         "DIRECT_FETCH:1",
-        "CONSOLE:3",
         "DEVICE_API:ImagePicker,SecureStore"
       ]
     },
     {
       "file": "src/screens/LvImportScreen.tsx",
-      "lines": 881,
-      "sha16": "ca74d48df970bd71",
+      "lines": 883,
+      "sha16": "aad212b6fccf77e2",
       "flags": [
         "DIRECT_FETCH:1",
         "DEVICE_API:DocumentPicker,FileSystem"
@@ -947,24 +991,24 @@
     },
     {
       "file": "src/screens/LvReadOnlyScreen.tsx",
-      "lines": 1074,
-      "sha16": "76e8f2ff1638e0a2",
+      "lines": 1079,
+      "sha16": "d91d377eae733371",
       "flags": [
         "DEVICE_API:Sharing"
       ]
     },
     {
       "file": "src/screens/MengenEditorScreen.tsx",
-      "lines": 821,
-      "sha16": "7ab7a9aafcb795a2",
+      "lines": 882,
+      "sha16": "f232c505f783a459",
       "flags": [
         "CONSOLE:6"
       ]
     },
     {
       "file": "src/screens/MengenListScreen.tsx",
-      "lines": 573,
-      "sha16": "36421bdc9651384f",
+      "lines": 606,
+      "sha16": "b4baef6b42db101a",
       "flags": []
     },
     {
@@ -978,10 +1022,10 @@
     },
     {
       "file": "src/screens/PhotosNotesScreen.tsx",
-      "lines": 1767,
-      "sha16": "ce99068d5b6b8bb7",
+      "lines": 1748,
+      "sha16": "fd9a9c12b07495a8",
       "flags": [
-        "CONSOLE:4",
+        "CONSOLE:1",
         "TODO:2",
         "DEVICE_API:Camera,ImagePicker,DocumentPicker,FileSystem"
       ]
@@ -989,7 +1033,7 @@
     {
       "file": "src/screens/ProjectHomeScreen.tsx",
       "lines": 1757,
-      "sha16": "43fd6e78bbcc5d15",
+      "sha16": "9da0c3d096acf1c6",
       "flags": [
         "CONSOLE:2",
         "TODO:2",
@@ -1006,16 +1050,16 @@
     },
     {
       "file": "src/screens/ProjectsScreen.tsx",
-      "lines": 1101,
-      "sha16": "8acdbeb84d3f1a84",
+      "lines": 1106,
+      "sha16": "62aaf18f8653890b",
       "flags": [
         "TODO:1"
       ]
     },
     {
       "file": "src/screens/RechnungEditorScreen.tsx",
-      "lines": 1907,
-      "sha16": "1d81d71b37c85a4c",
+      "lines": 1981,
+      "sha16": "f17a3d9430d34bd8",
       "flags": []
     },
     {
@@ -1034,8 +1078,8 @@
     },
     {
       "file": "src/screens/RegieScreen.tsx",
-      "lines": 2219,
-      "sha16": "b1c2325269d2d39d",
+      "lines": 2218,
+      "sha16": "4333b41119909463",
       "flags": [
         "DIRECT_FETCH:1",
         "CONSOLE:2",
@@ -1083,11 +1127,9 @@
     },
     {
       "file": "src/screens/TagesberichtEditorScreen.tsx",
-      "lines": 982,
-      "sha16": "ed82369f4a4fca1e",
-      "flags": [
-        "CONSOLE:1"
-      ]
+      "lines": 1005,
+      "sha16": "ecbb24333646d695",
+      "flags": []
     },
     {
       "file": "src/screens/TagesberichtListScreen.tsx",
@@ -1114,15 +1156,15 @@
       "flags": []
     },
     {
-      "file": "src/ui/inlineStyles.ts",
-      "lines": 337,
-      "sha16": "c5a78738afaa6acb",
-      "flags": []
-    },
-    {
       "file": "src/ui/RlcUi.tsx",
       "lines": 189,
       "sha16": "c7ce921ab93a0790",
+      "flags": []
+    },
+    {
+      "file": "src/ui/inlineStyles.ts",
+      "lines": 337,
+      "sha16": "c5a78738afaa6acb",
       "flags": []
     },
     {

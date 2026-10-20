@@ -3,11 +3,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, Pressable, FlatList, SafeAreaView, Alert, TextInput, RefreshControl, Platform, Modal, KeyboardAvoidingView, ScrollView, Keyboard, StyleSheet } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/types";
 import { api, projectFsKey, looksLikeProjectCode, extractBaCode, Project,
 // @ts-ignore (se non esiste, rimuovi questa riga)
 IS_DEV } from "../lib/api";
 import { COLORS, createRlcStyles } from "../ui/theme";
+import { localUserEmail } from "../lib/localAuth";
 type Props = NativeStackScreenProps<RootStackParamList, "Projects">;
 type WorkflowStatus = "DRAFT" | "EINGEREICHT" | "FREIGEGEBEN" | "ABGELEHNT";
 type Counter = {
@@ -138,18 +140,32 @@ type LocalProject = {
   kunde?: string;
   createdAt: number;
 };
+const LEGACY_PROJECT_OWNER_KEY = "rlc_mobile_local_projects_v1:legacy_owner";
+async function localProjectsKey(): Promise<string> {
+  const email = String(await localUserEmail()).trim().toLowerCase();
+  if (!email) throw new Error("Lokales Konto fehlt. Bitte erneut anmelden.");
+  return `${KEY_LOCAL_PROJECTS}:account:${encodeURIComponent(email)}`;
+}
 async function loadLocalProjects(): Promise<LocalProject[]> {
-  try {
-    const raw = await AsyncStorage.getItem(KEY_LOCAL_PROJECTS);
-    if (!raw) return [];
-    const j = JSON.parse(raw);
-    return Array.isArray(j) ? j as LocalProject[] : [];
-  } catch {
-    return [];
+  const key = await localProjectsKey();
+  const owned = await AsyncStorage.getItem(key);
+  if (owned !== null) {
+    try { const list = JSON.parse(owned); return Array.isArray(list) ? list as LocalProject[] : []; }
+    catch { return []; }
   }
+  // Legacy data may be assigned only once; later local accounts never inherit it.
+  const legacy = await AsyncStorage.getItem(KEY_LOCAL_PROJECTS);
+  const owner = await AsyncStorage.getItem(LEGACY_PROJECT_OWNER_KEY);
+  if (legacy !== null && (owner === null || owner === key)) {
+    if (owner === null) await AsyncStorage.setItem(LEGACY_PROJECT_OWNER_KEY, key);
+    await AsyncStorage.setItem(key, legacy);
+    try { const list = JSON.parse(legacy); return Array.isArray(list) ? list as LocalProject[] : []; }
+    catch { return []; }
+  }
+  return [];
 }
 async function saveLocalProjects(list: LocalProject[]) {
-  await AsyncStorage.setItem(KEY_LOCAL_PROJECTS, JSON.stringify(list || []));
+  await AsyncStorage.setItem(await localProjectsKey(), JSON.stringify(list || []));
 }
 function localToProject(lp: LocalProject): Project {
   return {
@@ -189,6 +205,7 @@ export default function ProjectsScreen({
   const [pendingOpen, setPendingOpen] = useState<Project | null>(null);
   const [counters, setCounters] = useState<Record<string, ProjectCounters>>({});
   const countersReqId = useRef(0);
+  const lastFocusLoadRef = useRef(0);
   const [newOpen, setNewOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newClient, setNewClient] = useState("");
@@ -227,7 +244,7 @@ export default function ProjectsScreen({
         setItems(arr);
         const myReq = ++countersReqId.current;
         const next: Record<string, ProjectCounters> = {};
-        const slice = arr.slice(0, 30);
+        const slice = arr.slice(0, 8);
         await Promise.all(slice.map(async p => {
           const key = projectFsKey(p);
           try {
@@ -244,10 +261,7 @@ export default function ProjectsScreen({
           }
         }));
         if (myReq === countersReqId.current) {
-          setCounters(prev => ({
-            ...prev,
-            ...next
-          }));
+          setCounters(next);
         }
         return;
       }
@@ -256,7 +270,7 @@ export default function ProjectsScreen({
       setItems(arr);
       const myReq = ++countersReqId.current;
       const next: Record<string, ProjectCounters> = {};
-      const slice = arr.slice(0, 30);
+      const slice = arr.slice(0, 8);
       await Promise.all(slice.map(async p => {
         const key = projectFsKey(p);
         try {
@@ -273,10 +287,7 @@ export default function ProjectsScreen({
         }
       }));
       if (myReq === countersReqId.current) {
-        setCounters(prev => ({
-          ...prev,
-          ...next
-        }));
+        setCounters(next);
       }
     } catch (e: any) {
       Alert.alert("Projekte", humanizeLoadError(e));
@@ -284,22 +295,19 @@ export default function ProjectsScreen({
       setLoading(false);
     }
   }, [readMode, readCodeMap]);
-  useEffect(() => {
-    (async () => {
-      const m = await readMode();
-      await readCodeMap(m);
-      await load();
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useFocusEffect(useCallback(() => {
+    if (Date.now() - lastFocusLoadRef.current < 8000) return;
+    lastFocusLoadRef.current = Date.now();
+    void load();
+  }, [load]));
   const filtered = useMemo(() => {
     const s2 = String(q || "").trim().toLowerCase();
     if (!s2) return items;
     return items.filter(p => {
-      const blob = [(p as any).id, (p as any).code, (p as any).name, (p as any).number, (p as any).baustellenNummer, (p as any).ort, (p as any).place, (p as any).kunde, (p as any).client].map(x => String(x || "").toLowerCase()).join(" ");
+      const blob = [(p as any).id, (p as any).code, codeMap[String((p as any).id || "")], (p as any).name, (p as any).number, (p as any).baustellenNummer, (p as any).ort, (p as any).place, (p as any).kunde, (p as any).client].map(x => String(x || "").toLowerCase()).join(" ");
       return blob.includes(s2);
     });
-  }, [items, q]);
+  }, [items, q, codeMap]);
   const goBackSafe = useCallback(() => {
     if (navigation.canGoBack()) return navigation.goBack();
     navigation.replace("Login", {

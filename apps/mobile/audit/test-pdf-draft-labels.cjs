@@ -1,0 +1,10 @@
+const assert=require("node:assert/strict");
+const fs=require("node:fs"),path=require("node:path");
+const read=(p)=>fs.readFileSync(path.resolve(__dirname,"../src/screens",p),"utf8");
+const invoice=read("RechnungEditorScreen.tsx"),advance=read("AbschlagEditorScreen.tsx");
+assert.match(invoice,/subTitle: `ENTWURF – /);
+assert.match(invoice,/subTitle: `ENTWURF – Abschlag Nr/);
+assert.match(advance,/subTitle: "ENTWURF – Gespeicherter Abschlag"/);
+assert.match(advance,/subTitle: "ENTWURF – Eingang \/ Prüfung"/);
+assert.match(invoice,/issueInvoiceOnServer\(pk, doc.id\)/);
+console.log("PASS draft PDF labels: Rechnung, Schlussrechnung, both Abschlag flows");

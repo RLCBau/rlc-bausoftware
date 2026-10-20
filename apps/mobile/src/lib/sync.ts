@@ -1,4 +1,4 @@
-﻿// apps/mobile/src/lib/sync.ts
+// apps/mobile/src/lib/sync.ts
 import { api } from "./api";
 import { getServerToken } from "./auth";
 import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
@@ -129,10 +129,12 @@ async function syncAllOnce(opts?: SyncOptions): Promise<{ ok: number; fail: numb
     try {
       await queueUpdate(item.id, { lastTryAt: Date.now(), tries: triesNow });
       const acknowledged = await syncOne(item);
-      if (acknowledged && typeof acknowledged === "object" && "ok" in acknowledged && acknowledged.ok === false) {
-        throw new Error("SERVER_REJECTED_SYNC");
+      // Never commit a queued document on a bare HTTP 200, empty JSON, or null.
+      // A positive application-level ACK is mandatory before DONE.
+      if (!acknowledged || typeof acknowledged !== "object" || acknowledged.ok !== true) {
+        throw new Error("SERVER_SYNC_ACK_MISSING_OR_REJECTED");
       }
-      await queueUpdate(item.id, { status: "DONE", error: undefined, nextTryAt: null });
+      await queueUpdate(item.id, { status: "DONE", error: undefined, nextTryAt: null, result: acknowledged });
       ok++;
     } catch (e: any) {
       const msg = String(e?.message || "sync failed");
@@ -325,6 +327,20 @@ async function syncOne(item: QueueItem) {
   }
 
   // =========================
+  // ARBEITSZEIT (Zeitbuchungen mit GPS-Belegen)
+  // =========================
+  if (item.kind === "ARBEITSZEIT") {
+    const raw: any = item.payload || {};
+    const row = raw?.row ?? raw;
+    const result = await serverRequest<{ ok?: boolean }>(`/api/inbox/${encodeURIComponent(pk)}/ARBEITSZEIT/submit`, {
+      method: "POST",
+      body: JSON.stringify({ ...row, projectKey: pk, projectCode: pk }),
+    });
+    if (result?.ok !== true) throw new Error("ARBEITSZEIT_INBOX_NOT_CONFIRMED");
+    return result;
+  }
+
+  // =========================
   // LIEFERSCHEIN (Upload + Commit)
   // =========================
   if (item.kind === "LIEFERSCHEIN") {
@@ -400,6 +416,26 @@ async function syncOne(item: QueueItem) {
       throw new Error("FOTOS_UPLOAD_NOT_CONFIRMED");
     }
     return uploaded;
+  }
+
+  if (item.kind === "MENGEN_SYNC") {
+    const payload: any = item.payload || {};
+    const doc = payload?.doc ?? payload?.row ?? payload;
+    const saved = await (api as any).saveMengen(pk, doc);
+    if (saved?.ok !== true || !saved?.document?.id) {
+      throw new Error("MENGEN_SYNC_NOT_CONFIRMED");
+    }
+    return saved;
+  }
+
+  if (item.kind === "ANGEBOT_SYNC") {
+    const payload: any = item.payload || {};
+    const doc = payload?.doc ?? payload?.row ?? payload;
+    const saved = await (api as any).saveAngebot(pk, doc);
+    if (saved?.ok !== true || !saved?.document?.id) {
+      throw new Error("ANGEBOT_SYNC_NOT_CONFIRMED");
+    }
+    return saved;
   }
 
   if (

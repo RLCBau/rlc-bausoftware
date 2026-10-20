@@ -176,8 +176,11 @@ export type QueueItem =
   | (QueueItemBase & {
       kind:
         | "BAUTAGEBUCH"
+        | "ARBEITSZEIT"
         | "ANGEBOT"
         | "MENGENERMITTLUNG"
+        | "MENGEN_SYNC"
+        | "ANGEBOT_SYNC"
         | "ABSCHLAGSRECHNUNG"
         | "RECHNUNG"
         | "KALKULATION"
@@ -525,6 +528,9 @@ export type QueueFlushOptions = {
   /** se true: ordina FIFO (oldest first). default true */
   fifo?: boolean;
 
+  /** Se impostato, solo questi tipi possono essere processati. */
+  kinds?: QueueItem["kind"][];
+
   /** Se impostato, gli altri progetti non devono cambiare stato. */
   projectId?: string;
 };
@@ -565,6 +571,10 @@ export async function queueFlush(
     for (const item of ordered) {
       if (processed >= maxItems) break;
       if (targetProject && item.projectId !== targetProject) {
+        skipped++;
+        continue;
+      }
+      if (options?.kinds && !options.kinds.includes(item.kind)) {
         skipped++;
         continue;
       }

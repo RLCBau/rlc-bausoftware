@@ -12,6 +12,8 @@ import { RootStackParamList } from "../navigation/types";
 import { COLORS, RLC_SPACING, RLC_RADIUS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
+import { queueAdd } from "../lib/offlineQueue";
+import { syncAll } from "../lib/sync";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
 import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
 import { parseRlcKiSmartDoc } from "../lib/rlcKiSmartParser";
@@ -27,6 +29,7 @@ type AngebotRow = {
 };
 type AngebotDoc = {
   id: string;
+  version?: number;
   projectId: string;
   projectCode: string;
   title?: string;
@@ -102,6 +105,7 @@ function normalizeStatus(v: any): AngebotStatus {
 function normalizeOfferDoc(input: any): AngebotDoc {
   return {
     id: String(input?.id || makeId()),
+    version: Number.isInteger(Number(input?.version)) ? Number(input.version) : undefined,
     projectId: String(input?.projectId || ""),
     projectCode: String(input?.projectCode || ""),
     title: input?.title ? String(input.title) : undefined,
@@ -149,7 +153,7 @@ function createEmptyOffer(params: {
     customerAddress: "",
     customerEmail: "",
     customerPhone: "",
-    baustelle: params.title || "",
+    baustelle: [params.projectCode, params.title].filter(Boolean).join(" • "),
     datum: todayDE(),
     validUntil: plusDaysDE(14),
     rabattPct: "0",
@@ -189,17 +193,12 @@ async function getMode(): Promise<"NUR_APP" | "SERVER_SYNC"> {
   return raw === "NUR_APP" ? "NUR_APP" : "SERVER_SYNC";
 }
 async function loadOfferSmart(projectCode: string, angebotId: string) {
-  // Prima locale: evita che server vuoto/stale azzeri l'offerta in modifica
   const local = await loadOffer(projectCode, angebotId);
-  if (local && Array.isArray((local as any).rows) && (local as any).rows.length) {
-    return local;
-  }
-  const mode = await getMode();
-  if (mode === "NUR_APP") return local;
+  if (await getMode() === "NUR_APP") return local;
   try {
     const list = await api.getAngebote(projectCode);
     const found = Array.isArray(list) ? list.find((x: any) => String(x?.id) === String(angebotId)) : null;
-    if (found && Array.isArray(found?.rows) && found.rows.length) {
+    if (found) {
       const normalized = normalizeOfferDoc(found);
       await saveOffer(normalized);
       return normalized;
@@ -210,12 +209,21 @@ async function loadOfferSmart(projectCode: string, angebotId: string) {
   return local;
 }
 async function saveOfferSmart(doc: AngebotDoc) {
-  const next = normalizeOfferDoc({
-    ...doc,
-    updatedAt: new Date().toISOString()
-  });
-  // Il documento ufficiale sul server viene creato soltanto dopo Freigabe.
-  return saveOffer(next);
+  const next = normalizeOfferDoc({ ...doc, updatedAt: new Date().toISOString() });
+  if (await getMode() === "NUR_APP") return saveOffer(next);
+  try {
+    const saved = await api.saveAngebot(next.projectCode, {
+      ...next,
+      baseVersion: Number((next as any).version || 0),
+    });
+    const serverDoc = saved?.document ?? saved?.data ?? saved;
+    return saveOffer(normalizeOfferDoc(serverDoc));
+  } catch (error) {
+    await saveOffer(next);
+    await queueAdd({ kind: "ANGEBOT_SYNC" as any, projectId: next.projectCode, payload: { doc: next } } as any);
+    void syncAll().catch(() => undefined);
+    throw error;
+  }
 }
 async function syncAngebotToMengenAuto(saved: any) {
   const projectCode = String(saved?.projectCode || "").trim();
@@ -261,6 +269,23 @@ async function syncAngebotToMengenAuto(saved: any) {
   };
   if (existingIdx >= 0) next[existingIdx] = mengenDoc;else next.unshift(mengenDoc);
   await AsyncStorage.setItem(key, JSON.stringify(next));
+  if (await getMode() !== "NUR_APP") {
+    try {
+      const savedMengen = await api.saveMengen(projectCode, {
+        ...mengenDoc,
+        baseVersion: Number(next[existingIdx >= 0 ? existingIdx : 0]?.version || 0),
+      });
+      const serverDoc = savedMengen?.document ?? savedMengen;
+      const idx = next.findIndex((x: any) => String(x?.id) === String(serverDoc?.id));
+      if (idx >= 0 && serverDoc) {
+        next[idx] = { ...next[idx], ...serverDoc };
+        await AsyncStorage.setItem(key, JSON.stringify(next));
+      }
+    } catch {
+      await queueAdd({ kind: "MENGEN_SYNC", projectId: projectCode, payload: { doc: mengenDoc } } as any);
+      void syncAll().catch(() => undefined);
+    }
+  }
 }
 async function exportOfferPdf(params: {
   doc: AngebotDoc;
@@ -288,7 +313,7 @@ async function exportOfferPdf(params: {
       pos: r.pos,
       text: r.text,
       unit: r.unit,
-      quantity: r.quantity,
+      qty: r.quantity,
       ep: r.ep,
       gp
     };
@@ -486,7 +511,13 @@ export default function AngebotEditorScreen({
       }
       const found = await loadOfferSmart(projectCode, angebotId);
       if (found) {
-        setDoc(found);
+        setDoc({
+          ...found,
+          projectCode: projectCode || found.projectCode,
+          projectId: projectId || found.projectId,
+          baustelle: String(found.baustelle || "").includes(projectCode) ? found.baustelle :
+            [projectCode, found.baustelle || title].filter(Boolean).join(" • "),
+        });
       }
       setLoaded(true);
     } catch (e: any) {

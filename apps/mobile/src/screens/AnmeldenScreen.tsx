@@ -1,7 +1,9 @@
-import React, { useLayoutEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { SafeAreaView, View, Text, TextInput, Pressable, Alert } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { readServerProjectInfo } from "../lib/serverProjectInfo";
 import { setSession, SessionRole } from "../storage/session";
 import { COLORS, createRlcStyles } from "../ui/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "Anmelden">;
@@ -9,6 +11,9 @@ const ROLES: {
   role: SessionRole;
   label: string;
 }[] = [{
+  role: "ADMIN",
+  label: "Administrator"
+}, {
   role: "BAULEITER",
   label: "Bauleiter"
 }, {
@@ -20,6 +25,15 @@ const ROLES: {
 }, {
   role: "POLIER",
   label: "Polier / Vorarbeiter"
+}, {
+  role: "VORARBEITER",
+  label: "Vorarbeiter"
+}, {
+  role: "MASCHINIST",
+  label: "Maschinist"
+}, {
+  role: "VERMESSER",
+  label: "Vermesser"
 }, {
   role: "FAHRER",
   label: "Fahrer"
@@ -37,6 +51,28 @@ export default function AnmeldenScreen({
   } = route.params;
   const [role, setRole] = useState<SessionRole>("MITARBEITER");
   const [name, setName] = useState("");
+  const [serverMode, setServerMode] = useState(true);
+  const [serverVerified, setServerVerified] = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const mode = await AsyncStorage.getItem("rlc_mobile_mode");
+        if (!live) return;
+        const isServer = mode !== "NUR_APP";
+        setServerMode(isServer);
+        if (!isServer) return;
+        const r = await readServerProjectInfo(String(projectId));
+        const assigned = ROLES.find(x => x.role === String(r?.currentRole || "").toUpperCase());
+        if (live && r?.ok && assigned) {
+          setRole(assigned.role);
+          setName(r.currentName || assigned.label);
+          setServerVerified(true);
+        }
+      } catch { if (live) setServerVerified(false); }
+    })();
+    return () => { live = false; };
+  }, [projectId]);
   useLayoutEffect(() => {
     navigation.setOptions({
       title: title || "Anmelden",
@@ -54,6 +90,7 @@ export default function AnmeldenScreen({
   const roleLabel = useMemo(() => ROLES.find(x => x.role === role)?.label || "", [role]);
   async function onSubmit() {
     const n = name.trim();
+    if (serverMode && !serverVerified) return Alert.alert("Serverzugang", "Keine verifizierte Rolle für dieses Projekt. Bitte im RLC Web die Berechtigungen prüfen.");
     if (!n) return Alert.alert("Anmelden", "Bitte Namen eingeben.");
     await setSession(projectId, {
       projectId,
@@ -69,11 +106,11 @@ export default function AnmeldenScreen({
       <Text style={s.sub}>Projekt: {projectId}</Text>
 
       <View style={s.card}>
-        <Text style={s.label}>Rolle</Text>
+        <Text style={s.label}>{serverMode ? "Rolle aus RLC Web (gesperrt)" : "Rolle"}</Text>
         <View style={s.roleGrid}>
           {ROLES.map(r => {
           const active = r.role === role;
-          return <Pressable key={r.role} style={[s.roleBtn, active && s.roleBtnActive]} onPress={() => setRole(r.role)}>
+          return <Pressable key={r.role} style={[s.roleBtn, active && s.roleBtnActive]} onPress={() => { if (!serverMode) setRole(r.role); }}>
                 <Text style={[s.roleTxt, active && s.roleTxtActive]} numberOfLines={1}>
                   {r.label}
                 </Text>
@@ -82,8 +119,9 @@ export default function AnmeldenScreen({
         </View>
 
         <Text style={s.label}>Name</Text>
-        <TextInput style={s.input} value={name} onChangeText={setName} placeholder="Name" placeholderTextColor={COLORS.sub} />
+        <TextInput style={s.input} value={name} editable={!serverMode} onChangeText={setName} placeholder="Name" placeholderTextColor={COLORS.sub} />
 
+        {serverMode && !serverVerified ? <Text>Keine gültige serverseitige Rollenzuweisung geladen.</Text> : null}
         <Pressable style={s.submit} onPress={onSubmit}>
           <Text style={s.submitTxt}>Anmelden</Text>
           <Text style={s.submitSub}>Als: {roleLabel}</Text>

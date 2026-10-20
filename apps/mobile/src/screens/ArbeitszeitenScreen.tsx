@@ -16,6 +16,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
 import { RootStackParamList } from "../navigation/types";
 import { request } from "../lib/api";
+import { queueAdd } from "../lib/offlineQueue";
 import { getSession } from "../storage/session";
 import { COLORS, createRlcStyles } from "../ui/theme";
 
@@ -78,7 +79,10 @@ type Row = {
 
 const KEY_MODE = "rlc_mobile_mode";
 const uid = (prefix = "az") => `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 const storeKey = (p: string) => `rlc_mobile_arbeitszeiten:${p}`;
 const inboxKey = (p: string) => `rlc_mobile_inbox_arbeitszeiten:${p}`;
 
@@ -111,7 +115,8 @@ function calculateHours(events: TimeEvent[]) {
   const start = sorted.find((x) => x.type === "START")?.timestamp;
   const end = [...sorted].reverse().find((x) => x.type === "END")?.timestamp;
   if (!start || !end || end <= start) return 0;
-  return Math.max(0, (end - start) / 3600000 - calculateBreakMinutes(sorted) / 60);
+  const withinShift = sorted.filter(event => event.timestamp >= start && event.timestamp <= end);
+  return Math.max(0, (end - start) / 3600000 - calculateBreakMinutes(withinShift) / 60);
 }
 
 function deriveState(events: TimeEvent[]): ClockState {
@@ -252,8 +257,8 @@ export default function ArbeitszeitenScreen({ route }: Props) {
 
   const persist = useCallback(
     async (next: Row[]) => {
-      setRows(next);
       await AsyncStorage.setItem(storeKey(projectKey), JSON.stringify(next));
+      setRows(next);
     },
     [projectKey]
   );
@@ -332,6 +337,12 @@ export default function ArbeitszeitenScreen({ route }: Props) {
         Alert.alert("Arbeitsende fehlt", "Die Arbeitszeit kann erst nach Arbeitsende eingereicht werden.");
         return;
       }
+      const started = row.events.some(event => event.type === "START");
+      const ended = row.events.some(event => event.type === "END");
+      if (!started || !ended || calculateHours(row.events) <= 0) {
+        Alert.alert("Zeiterfassung unvollständig", "Gültige Arbeitsbeginn- und Arbeitsende-Buchungen mit positiver Arbeitszeit sind erforderlich.");
+        return;
+      }
       if (!row.activity.trim()) {
         Alert.alert("Tätigkeit fehlt", "Bitte die ausgeführten Tätigkeiten eintragen.");
         return;
@@ -377,11 +388,20 @@ export default function ArbeitszeitenScreen({ route }: Props) {
           return;
         }
 
-        await request(`/api/inbox/${encodeURIComponent(projectKey)}/ARBEITSZEIT/submit`, {
-          method: "POST",
-          body: JSON.stringify(doc),
-          headers: { "Content-Type": "application/json" },
-        });
+        try {
+          const acknowledged: any = await request(`/api/inbox/${encodeURIComponent(projectKey)}/ARBEITSZEIT/submit`, {
+            method: "POST",
+            body: JSON.stringify(doc),
+            headers: { "Content-Type": "application/json" },
+          });
+          if (acknowledged?.ok !== true) throw new Error("ARBEITSZEIT_INBOX_NOT_CONFIRMED");
+        } catch (syncError) {
+          await queueAdd({ kind: "ARBEITSZEIT", projectId: projectKey, payload: { row: doc } });
+          await persist(rows.map((x) => (x.id === row.id ? doc : x)));
+          setEditing(doc);
+          Alert.alert("Lokal gespeichert", "Server nicht erreichbar. Arbeitszeit bleibt in der Sync Queue für einen erneuten Versuch.");
+          return;
+        }
         await persist(rows.map((x) => (x.id === row.id ? doc : x)));
         setEditing(doc);
         Alert.alert("Gesendet", "Die Arbeitszeit wurde an die Eingangsprüfung übertragen.");

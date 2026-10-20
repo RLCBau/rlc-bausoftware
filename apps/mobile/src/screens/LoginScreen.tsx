@@ -1,6 +1,6 @@
 // apps/mobile/src/screens/LoginScreen.tsx
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, Alert, Platform, Modal, Linking, SafeAreaView, KeyboardAvoidingView, ScrollView, Keyboard, Image } from "react-native";
+import { View, Text, TextInput, Pressable, Alert, Platform, Modal, SafeAreaView, KeyboardAvoidingView, ScrollView, Keyboard, Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
@@ -73,10 +73,6 @@ function hash32(input: string) {
 function passHash(email: string, pw: string) {
   const salt = String(email || "").replace(/\s+/g, "").trim().toLowerCase();
   return hash32(`${salt}::${pw}`);
-}
-function code6() {
-  const n = Math.floor(Math.random() * 900000) + 100000;
-  return String(n);
 }
 async function loadJson<T>(key: string): Promise<T | null> {
   try {
@@ -231,7 +227,7 @@ export default function LoginScreen({
     if (!role) return true;
     return false;
   }, [normalizedEmail, password, name, role, loading, passwordOnly]);
-  const canRegisterLocal = isStandalone && !isEmailVerified;
+  const canRegisterLocal = isStandalone && !localUser;
   const canRegisterServer = !isStandalone && !isEmailVerified;
   async function loadCachedBranding() {
     try {
@@ -635,22 +631,6 @@ export default function LoginScreen({
       onPress: onHardReset
     }]);
   }
-  async function sendLocalVerifyCode() {
-    const e = normalizedEmail;
-    const c = code6();
-    const h = hash32(c);
-    await AsyncStorage.setItem(KEY_LOCAL_VERIFY_EMAIL, e);
-    await AsyncStorage.setItem(KEY_LOCAL_VERIFY_HASH, h);
-    await AsyncStorage.setItem(KEY_LOCAL_VERIFY_TS, String(Date.now()));
-    const subject = encodeURIComponent("RLC Mobile – E-Mail bestätigen");
-    const body = encodeURIComponent(`Dein Bestätigungscode für RLC Mobile ist:\n\n${c}\n\n(öffne die App und füge dann den Code ein)`);
-    const url = `mailto:${encodeURIComponent(e)}?subject=${subject}&body=${body}`;
-    try {
-      const can = await Linking.canOpenURL(url);
-      if (can) await Linking.openURL(url);
-    } catch {}
-    Alert.alert("Code erstellt", "E-Mail-App wurde geöffnet. Sende dir die Mail und füge dann den Code in der App ein.");
-  }
   async function onRegisterLocal() {
     setErr(null);
     setLoading(true);
@@ -673,63 +653,10 @@ export default function LoginScreen({
       await persistEmail(e);
       await persistProfile(e);
       await clearVerificationState();
-      await sendLocalVerifyCode();
-      Alert.alert("Registriert", "Bitte E-Mail bestätigen, dann anmelden.");
+      setPostVerifyStep("NEED_ADMIN");
+      Alert.alert("Registriert", "Lokaler Benutzer wurde angelegt. Für NUR_APP erfolgt keine E-Mail-Verifizierung; bitte jetzt Firmendaten + Admin-Code einrichten.");
     } catch (e: any) {
       setErr(e?.message || "Registrierung fehlgeschlagen");
-    } finally {
-      setLoading(false);
-    }
-  }
-  async function onVerifyLocalCode() {
-    setErr(null);
-    setLoading(true);
-    try {
-      const e = normalizedEmail;
-      const code = verifyToken.trim();
-      if (!e.includes("@")) throw new Error("Bitte gültige E-Mail eingeben.");
-      if (!code) throw new Error("Bitte Code einfügen.");
-      const pendingFor = ((await AsyncStorage.getItem(KEY_LOCAL_VERIFY_EMAIL)) || "").toLowerCase();
-      const pendingHash = (await AsyncStorage.getItem(KEY_LOCAL_VERIFY_HASH)) || "";
-      if (!pendingFor || !pendingHash) {
-        throw new Error("Kein Code vorhanden. Bitte zuerst registrieren (Code senden).");
-      }
-      if (pendingFor !== e) {
-        throw new Error("Code gehört zu einer anderen E-Mail. Bitte E-Mail prüfen.");
-      }
-      if (hash32(code) !== pendingHash) {
-        throw new Error("Code falsch.");
-      }
-      const verifiedAt = nowIso();
-      setEmailVerifiedAt(verifiedAt);
-      await patchAuthState({
-        email: e,
-        name: name.trim(),
-        role,
-        emailVerifiedAt: verifiedAt
-      }, mode as any);
-      try {
-        await AsyncStorage.setItem(KEY_EMAIL_VERIFIED_AT, verifiedAt);
-        await AsyncStorage.setItem(KEY_EMAIL_VERIFIED_FOR, e);
-      } catch {}
-      await AsyncStorage.multiRemove([KEY_LOCAL_VERIFY_EMAIL, KEY_LOCAL_VERIFY_HASH, KEY_LOCAL_VERIFY_TS]);
-      setVerifyOpen(false);
-      setVerifyToken("");
-      const okUnlocked = await checkAdminUnlocked("NUR_APP");
-      if (!okUnlocked) {
-        setPostVerifyStep("NEED_ADMIN");
-        Alert.alert("Verifiziert", "E-Mail bestätigt. Bitte Firmendaten + Admin-Code eingeben.");
-        return;
-      }
-      Alert.alert("Verifiziert", "E-Mail bestätigt. Weiter zu Projekte.");
-      navigation.reset({
-        index: 0,
-        routes: [{
-          name: "Projects"
-        }]
-      });
-    } catch (e: any) {
-      setErr(e?.message || "Verify fehlgeschlagen");
     } finally {
       setLoading(false);
     }
@@ -818,7 +745,7 @@ export default function LoginScreen({
       const e = normalizedEmail;
       if (!e.includes("@")) throw new Error("Bitte gültige E-Mail eingeben.");
       if (!name.trim()) throw new Error("Bitte Name eingeben.");
-      if (password.trim().length < 6) throw new Error("Passwort min. 6 Zeichen.");
+      if (password.length < 10 || password.length > 128) throw new Error("Passwort muss 10 bis 128 Zeichen haben.");
       const j = await (api.register as any)(e, password, "SERVER_SYNC", {
         name: name.trim(),
         role,
@@ -931,15 +858,11 @@ export default function LoginScreen({
       const e = normalizedEmail;
       if (!e.includes("@")) throw new Error("Bitte gültige E-Mail eingeben.");
       if (!passwordOnly && !name.trim()) throw new Error("Bitte Name eingeben.");
-      console.log("LOGIN EMAIL RAW:", email);
-      console.log("LOGIN EMAIL NORMALIZED:", e);
       const r = await api.login(e, password, "SERVER_SYNC");
       if (!r?.token) throw new Error("Login: token missing");
       await persistEmail(e);
       await persistProfile(e);
       await setToken(String(r.token));
-      const t = await getToken();
-      console.log("DEBUG TOKEN after setToken (SERVER_SYNC):", t ? t.slice(0, 20) + "..." : null);
       await patchAuthState({
         email: e,
         name: name.trim(),
@@ -1009,8 +932,8 @@ export default function LoginScreen({
       const newPw = String(resetNewPassword || "");
       if (!e.includes("@")) throw new Error("Bitte gültige E-Mail eingeben.");
       if (!token) throw new Error("Bitte Reset-Code eingeben.");
-      if (newPw.trim().length < 6) {
-        throw new Error("Neues Passwort muss mindestens 6 Zeichen haben.");
+      if (newPw.length < 10 || newPw.length > 128) {
+        throw new Error("Neues Passwort muss 10 bis 128 Zeichen haben.");
       }
       const j = await api.passwordResetConfirm(token, newPw);
       if (j?.ok !== true) {
@@ -1230,7 +1153,7 @@ export default function LoginScreen({
                 </View>
 
                 <Text style={s.hint}>
-                  {isStandalone ? "NUR_APP: Registrieren → Code per E-Mail senden → Code einfügen → Anmelden." : "SERVER: Registrieren → E-Mail bestätigen → Anmelden."}
+                  {isStandalone ? "NUR_APP: Lokales Konto anlegen → Firmendaten + Admin-Code einrichten → Anmelden." : "SERVER: Registrieren → E-Mail bestätigen → Anmelden."}
                 </Text>
 
                 {err ? <Text style={s.err}>{err}</Text> : null}
@@ -1254,14 +1177,8 @@ export default function LoginScreen({
                   pressed
                 }) => [s.btnSecondary, (!canRegisterLocal || loading) && s.btnDis, pressed && canRegisterLocal && !loading ? s.pressed : null]} disabled={!canRegisterLocal || loading} onPress={onRegisterLocal}>
                       <Text style={s.btnSecondaryTxt}>
-                        {loading ? "Bitte warten..." : "Registrieren (NUR_APP) + Code senden"}
+                        {loading ? "Bitte warten..." : "Lokales Konto anlegen (NUR_APP)"}
                       </Text>
-                    </Pressable>
-
-                    <Pressable style={({
-                  pressed
-                }) => [s.btnSecondary, loading && s.btnDis, pressed && !loading ? s.pressed : null]} disabled={loading} onPress={() => setVerifyOpen(true)}>
-                      <Text style={s.btnSecondaryTxt}>E-Mail bestätigen (Code)</Text>
                     </Pressable>
 
                     {localUser ? <Pressable style={({
@@ -1339,15 +1256,15 @@ export default function LoginScreen({
             <View style={s.modalCard}>
               <Text style={s.modalTitle}>E-Mail bestätigen</Text>
               <Text style={s.modalHint}>
-                {isStandalone ? "Code aus deiner E-Mail einfügen." : "Token aus der E-Mail einfügen (oder aus dem Link extrahieren)."}
+                Token aus der E-Mail einfügen (oder aus dem Link extrahieren).
               </Text>
 
-              <TextInput style={s.modalInput} placeholder={isStandalone ? "6-stelliger Code" : "Verify-Token"} placeholderTextColor={COLORS.sub} autoCapitalize="none" editable={!loading} value={verifyToken} onChangeText={setVerifyToken} />
+              <TextInput style={s.modalInput} placeholder="Verify-Token" placeholderTextColor={COLORS.sub} autoCapitalize="none" editable={!loading} value={verifyToken} onChangeText={setVerifyToken} />
 
               <View style={s.modalActions}>
                 <Pressable style={({
                 pressed
-              }) => [s.modalBtnPrimary, loading && s.btnDis, pressed && !loading ? s.pressed : null]} disabled={loading} onPress={isStandalone ? onVerifyLocalCode : onVerifyServerToken}>
+              }) => [s.modalBtnPrimary, loading && s.btnDis, pressed && !loading ? s.pressed : null]} disabled={loading} onPress={onVerifyServerToken}>
                   <Text style={s.modalBtnPrimaryTxt}>Verify</Text>
                 </Pressable>
 

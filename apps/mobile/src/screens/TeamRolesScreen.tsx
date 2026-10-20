@@ -3,9 +3,11 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "re
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Platform, SafeAreaView, KeyboardAvoidingView } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getProjectRoles, setProjectRoles, ProjectRoles } from "../storage/projectMeta";
 import { getSession, SessionRole } from "../storage/session";
 import { resolveProjectCode, looksLikeProjectCode } from "../lib/api";
+import { readServerProjectInfo } from "../lib/serverProjectInfo";
 import { COLORS, createRlcStyles } from "../ui/theme";
 type Props = NativeStackScreenProps<RootStackParamList, "TeamRoles">;
 function canEdit(role?: SessionRole) {
@@ -51,7 +53,17 @@ export default function TeamRolesScreen({
     return looksLikeProjectCode(effectiveProjectCode) ? effectiveProjectCode : String(projectId || "").trim();
   }, [effectiveProjectCode, projectId]);
   const [sessionRole, setSessionRole] = useState<SessionRole | undefined>();
-  const editable = useMemo(() => canEdit(sessionRole), [sessionRole]);
+  const [serverMode, setServerMode] = useState(true);
+  const [serverAssignment, setServerAssignment] = useState<{ bauleiter: string[]; auftraggeber: string; projectCode: string; currentRole: string | null; currentName: string } | null>(null);
+  useEffect(() => {
+    if (!serverMode || !effectiveProjectKey) return;
+    readServerProjectInfo(String(projectId))
+      .then(r => { if (r?.ok) setServerAssignment({ bauleiter: r.bauleiter || [], auftraggeber: r.auftraggeber || "", projectCode: r.projectCode || "", currentRole: r.currentRole || null, currentName: r.currentName || "" }); })
+      .catch(() => setServerAssignment(null));
+  }, [serverMode, projectId]);
+  useEffect(() => { AsyncStorage.getItem("rlc_mobile_mode").then(mode => setServerMode(mode !== "NUR_APP")).catch(() => setServerMode(true)); }, []);
+  // Server authorizes project assignments; local device must never override them.
+  const editable = useMemo(() => !serverMode && canEdit(sessionRole), [serverMode, sessionRole]);
   const isEditingRef = useRef(false);
   const lastLoadedKeyRef = useRef<string>("");
   const initialModel = useMemo(() => ({
@@ -124,6 +136,7 @@ export default function TeamRolesScreen({
     (async () => {
       const s0 = (await getSession(effectiveProjectKey)) || (looksLikeProjectCode(String(routeProjectCode || "").trim()) ? await getSession(String(routeProjectCode).trim()) : null) || (await getSession(String(projectId).trim()));
       setSessionRole(s0?.role);
+      if (serverMode) return; // server assignments are read-only; never restore local legacy roles.
       const existing = (await getProjectRoles(effectiveProjectKey)) || (await getProjectRoles(projectId));
       if (existing && lastLoadedKeyRef.current !== String(effectiveProjectKey) && !isEditingRef.current) {
         lastLoadedKeyRef.current = String(effectiveProjectKey);
@@ -147,16 +160,16 @@ export default function TeamRolesScreen({
         }));
       }
     })();
-  }, [effectiveProjectKey, projectId, initialModel]);
+  }, [effectiveProjectKey, projectId, initialModel, serverMode]);
   async function onSave() {
-    if (!editable) return;
+    if (!editable) { Alert.alert("Serververwaltung", "Projektrollen werden zentral in RLC Web verwaltet."); return; }
     await setProjectRoles(effectiveProjectKey, normalize(model));
     isEditingRef.current = false;
     Alert.alert("Gespeichert", "Team/Rollen wurden offline gespeichert.");
   }
   const bauleiterMissing = !(model.bauleiter?.name || "").trim();
-  const headerCode = looksLikeProjectCode(effectiveProjectCode) ? effectiveProjectCode : "-";
-  const modeLabel = editable ? "Bearbeiten" : "Nur Ansicht";
+  const headerCode = serverMode ? (serverAssignment?.projectCode || "Serverprojekt wird geladen") : (looksLikeProjectCode(effectiveProjectCode) ? effectiveProjectCode : "-");
+  const modeLabel = serverMode ? "Web verwaltet" : editable ? "Bearbeiten" : "Nur Ansicht";
   return <SafeAreaView style={s.safe}>
       <KeyboardAvoidingView style={s._inline1} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={s.bg}>
@@ -192,7 +205,8 @@ export default function TeamRolesScreen({
                 </View>
               </View>
 
-              {bauleiterMissing ? <View style={s.warnBox}>
+              {serverMode ? <View style={s.warnBox}><Text style={s.warnTitle}>Zentrale Projektverwaltung</Text><Text style={s.warnText}>Bauleiter: {serverAssignment?.bauleiter?.join(", ") || "Nicht zugewiesen"} | Auftraggeber: {serverAssignment?.auftraggeber || "Nicht zugewiesen"}. {serverAssignment?.currentRole ? `Mobile-Rolle: ${serverAssignment.currentRole} (${serverAssignment.currentName}). ` : ""}Änderungen erfolgen ausschließlich in RLC Web.</Text></View> : null}
+              {!serverMode && bauleiterMissing ? <View style={s.warnBox}>
                   <Text style={s.warnTitle}>Bauleiter fehlt</Text>
                   <Text style={s.warnText}>
                     Bitte einen Bauleiter setzen (Pflicht), damit Team/Workflow sauber bleibt.
@@ -203,7 +217,7 @@ export default function TeamRolesScreen({
             <View style={s.body}>
               <Section title="Interne Rollen">
                 <Row label="Bauleiter (Pflicht)">
-                  <RoleInput editable={editable} value={model.bauleiter?.name || ""} onChangeText={(t: string) => patchModel(m => ({
+                  <RoleInput editable={editable} value={serverMode ? (serverAssignment?.bauleiter?.join(", ") || "") : (model.bauleiter?.name || "")} onChangeText={(t: string) => patchModel(m => ({
                   ...m,
                   bauleiter: {
                     ...(m.bauleiter || {}),
@@ -265,7 +279,7 @@ export default function TeamRolesScreen({
 
               <Section title="Auftraggeber / Ansprechpartner">
                 <Row label="Firma / Kunde">
-                  <RoleInput editable={editable} value={model.auftraggeber?.company || ""} onChangeText={(t: string) => patchModel(m => ({
+                  <RoleInput editable={editable} value={serverMode ? (serverAssignment?.auftraggeber || "") : (model.auftraggeber?.company || "")} onChangeText={(t: string) => patchModel(m => ({
                   ...m,
                   auftraggeber: {
                     ...(m.auftraggeber || {}),

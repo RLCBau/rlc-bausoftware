@@ -1,4 +1,4 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 /* ============================================================
@@ -11,8 +11,10 @@ const AUTH_STATE_KEY_BASE = "rlc_mobile_auth_state_v1";
 const AUTH_MODE_KEY = "rlc_mobile_auth_mode_v1"; // ✅ per ricordare l'ultima modalità usata
 
 // 🔐 ADMIN DEV (solo sviluppo, mai incorporare credenziali nel sorgente)
-const ADMIN_EMAIL = String(process.env.EXPO_PUBLIC_DEV_ADMIN_EMAIL || "").trim();
-const ADMIN_KEY = String(process.env.EXPO_PUBLIC_DEV_ADMIN_KEY || "").trim();
+// Expo PUBLIC variables are embedded in distributable application bundles.
+// Never read or ship privileged API keys through EXPO_PUBLIC_ variables.
+const ADMIN_EMAIL = "";
+const ADMIN_KEY = "";
 
 /* ============================================================
  *  TYPES
@@ -346,6 +348,21 @@ export async function adminLoginDev(): Promise<
   }
 }
 
+async function revokeServerTokenBestEffort(): Promise<void> {
+  const token = await getServerToken();
+  if (!token) return;
+  try {
+    const response = await fetch(`${await apiBaseUrl()}/api/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    // Offline logout must still clear locally; remote revocation is best-effort.
+    if (!response.ok) console.warn("[AUTH] remote logout failed", response.status);
+  } catch {
+    // Network unavailable: clear local credentials anyway.
+  }
+}
+
 /* ============================================================
  *  LOGOUT
  * ============================================================ */
@@ -361,6 +378,7 @@ export async function logout(mode?: AuthMode): Promise<void> {
   const m = mode || (await getAuthMode());
 
   if (m === "SERVER_SYNC") {
+    await revokeServerTokenBestEffort();
     await clearToken();
   }
 
@@ -375,6 +393,7 @@ export async function logout(mode?: AuthMode): Promise<void> {
  * Pulisce TUTTO (entrambi i profili) — utile per "Reset totale".
  */
 export async function logoutAll(): Promise<void> {
+  await revokeServerTokenBestEffort();
   await clearToken();
   try {
     await AsyncStorage.removeItem(authStateKeyForMode("SERVER_SYNC"));

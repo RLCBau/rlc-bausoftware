@@ -6,7 +6,8 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { COLORS, createRlcStyles } from "../ui/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../lib/api";
+import { api, looksLikeProjectCode } from "../lib/api";
+import { queueAdd } from "../lib/offlineQueue";
 type Props = NativeStackScreenProps<RootStackParamList, "TagesberichtEditor">;
 const KEY = "rlc_tagesbericht_list:";
 const KEY_MODE = "rlc_mobile_mode";
@@ -396,9 +397,21 @@ export default function TagesberichtEditorScreen({
         Alert.alert("Zeitformat", "Bitte Zeiten im Format HH:MM eingeben.");
         return false;
       }
-      if (line.pauseMin != null && Number(line.pauseMin) < 0) {
-        Alert.alert("Pause", "Pause muss 0 oder größer sein.");
+      const pause = Number(line.pauseMin || 0);
+      if (!Number.isFinite(pause) || pause < 0) {
+        Alert.alert("Pause", "Pause muss eine gültige Zahl ab 0 sein.");
         return false;
+      }
+      if (von && bis) {
+        const [startH, startM] = von.split(":").map(Number);
+        const [endH, endM] = bis.split(":").map(Number);
+        const start = startH * 60 + startM;
+        const endRaw = endH * 60 + endM;
+        const end = endRaw < start ? endRaw + 1440 : endRaw;
+        if (pause > end - start) {
+          Alert.alert("Pause", "Pause darf nicht länger als die Arbeitszeit sein.");
+          return false;
+        }
       }
     }
     return true;
@@ -502,7 +515,17 @@ export default function TagesberichtEditorScreen({
           await api.pushTagesberichtToServer(projectKey, inboxRow as any);
         } catch (e: any) {
           serverSyncError = String(e?.message || e || "Server Sync fehlgeschlagen");
-          console.log("Tagesbericht sync error:", serverSyncError);
+          if (looksLikeProjectCode(projectKey)) {
+            try {
+              await queueAdd({
+                kind: "TAGESBERICHT",
+                projectId: projectKey,
+                payload: { date: inboxRow.date, row: inboxRow }
+              });
+            } catch (queueError: any) {
+              serverSyncError += `; Offline-Queue: ${String(queueError?.message || queueError)}`;
+            }
+          }
         }
       }
       if (serverSyncError) {

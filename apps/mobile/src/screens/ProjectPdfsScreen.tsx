@@ -179,7 +179,8 @@ export default function ProjectPdfsScreen({
       const mapped: Row[] = [];
       for (const it of items) {
         const name = String(it?.name || "").trim();
-        const url = String(it?.url || "").trim();
+        // Older server records used the SPA route /projects/*; protected PDFs are served by /files/*.
+        const url = String(it?.url || "").trim().replace(/^\/projects\//, "/files/");
         if (!name || !url) continue;
         const abs = await api.absUrl(url);
         const local = await getLocalUri(projectFsKey, name);

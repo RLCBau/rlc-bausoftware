@@ -2268,11 +2268,10 @@ export const api = {
     });
   },
 
-  async deleteAngebot(projectIdOrCode: string, id: string): Promise<any> {
+  async deleteAngebot(projectIdOrCode: string, id: string, version: number): Promise<any> {
     const projectCode = await resolveProjectCode(projectIdOrCode);
-    return request<any>(kalkulationAngebotDeleteEndpoint(projectCode, id), {
-      method: "DELETE",
-    });
+    const endpoint = `${kalkulationAngebotDeleteEndpoint(projectCode, id)}?version=${encodeURIComponent(String(version))}`;
+    return request<any>(endpoint, { method: "DELETE" });
   },
 
   /** =========================
@@ -2298,11 +2297,10 @@ export const api = {
     });
   },
 
-  async deleteMengen(projectIdOrCode: string, id: string): Promise<any> {
+  async deleteMengen(projectIdOrCode: string, id: string, version: number): Promise<any> {
     const projectCode = await resolveProjectCode(projectIdOrCode);
-    return request<any>(kalkulationMengenDeleteEndpoint(projectCode, id), {
-      method: "DELETE",
-    });
+    const endpoint = `${kalkulationMengenDeleteEndpoint(projectCode, id)}?version=${encodeURIComponent(String(version))}`;
+    return request<any>(endpoint, { method: "DELETE" });
   },
 
   /** =========================
@@ -2669,7 +2667,7 @@ export const api = {
       fd.append("files", { uri: uploadUri, name, type });
     }
 
-    return request<any>(regieUploadEndpoint(), { method: "POST", body: fd });
+    return request<any>(`${regieUploadEndpoint()}?projectId=${encodeURIComponent(projectKey)}`, { method: "POST", body: fd });
   },
 
   async submitRegieInbox(projectIdOrCode: string, payload: any) {

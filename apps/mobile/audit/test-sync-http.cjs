@@ -9,6 +9,7 @@ const items = [
 ];
 let response=200;
 let semanticOk=true;
+let ackShape="normal";
 const calls=[];
 const mockQueue = {
   queueList: async () => items.map(x=>({...x})),
@@ -18,7 +19,7 @@ const mockApi={api:{ projects: async()=>[], getApiUrl: async()=>"https://api.tes
 global.fetch=async (url,init)=>{
   calls.push({url,body:JSON.parse(init.body)});
   if(response===0) throw new Error("Network request failed");
-  return {ok:response===200,status:response,text:async()=>response===200?JSON.stringify({ok:semanticOk}):"invalid request"};
+  return {ok:response===200,status:response,text:async()=>response===200?ackShape==="null"?"null":ackShape==="empty"?"{}":JSON.stringify({ok:semanticOk}):"invalid request"};
 };
 const source=path.resolve(__dirname,"../src/lib/sync.ts");
 const js=ts.transpileModule(fs.readFileSync(source,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
@@ -64,5 +65,12 @@ mod._compile(js,source);
   r=await mod.exports.syncAll({projectCode:"BA-2026-A"});
   assert.deepEqual(r,{ok:0,fail:1},"HTTP 200 with ok:false must fail");
   assert.equal(items[0].status,"ERROR","server rejection must not mark DONE");
-  console.log("PASS syncAll: isolation, backoff, offline handling, concurrent single-flight");
+  for(const shape of ["null","empty"]){
+    items[0].status="PENDING";items[0].tries=0;items[0].nextTryAt=null;
+    semanticOk=true;ackShape=shape;
+    r=await mod.exports.syncAll({projectCode:"BA-2026-A"});
+    assert.deepEqual(r,{ok:0,fail:1},`${shape} ACK must not commit`);
+    assert.equal(items[0].status,"ERROR",`${shape} ACK must retain queued document`);
+  }
+  console.log("PASS syncAll: isolation, backoff, offline handling, concurrent single-flight, strict ACK");
 })().catch(e=>{console.error(e);process.exitCode=1;});

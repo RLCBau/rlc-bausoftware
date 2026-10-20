@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, SafeAreaView, Alert, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
@@ -7,6 +7,8 @@ import { RootStackParamList } from "../navigation/types";
 import { COLORS, RLC_SPACING, RLC_RADIUS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
+import { queueAdd } from "../lib/offlineQueue";
+import { syncAll } from "../lib/sync";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
 import RlcKiFloatingButton from "../components/RlcKiFloatingButton";
 import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
@@ -19,7 +21,16 @@ function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 function num(v: string | number | null | undefined) {
-  return Number(String(v ?? "").replace(",", ".") || 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v ?? "").trim().replace(/\s/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 function money(v: number) {
   return Number(v || 0).toLocaleString("de-DE", {
@@ -128,6 +139,7 @@ function normalizeStoredDoc(input: any, params: {
     pdfUri: String(input?.pdfUri || ""),
     createdAt: Number(input?.createdAt || Date.now()),
     updatedAt: Number(input?.updatedAt || Date.now()),
+    version: Number(input?.version || 0),
     rows: Array.isArray(input?.rows) && input.rows.length ? input.rows.map((r: any, i: number) => normalizeMengenRow(r, i)) : [normalizeMengenRow({}, 0)]
   };
 }
@@ -190,11 +202,9 @@ export default function MengenEditorScreen({
       return Array.isArray(list) ? list : [];
     }
     try {
-      const raw = await AsyncStorage.getItem(KEY + projectCode);
-      const local = raw ? JSON.parse(raw) : [];
+      // SERVER_SYNC: PostgreSQL/API is authoritative; local storage is cache only.
       const server = await api.getMengen(projectCode);
-      const combined = [...(Array.isArray(server) ? server : []), ...(Array.isArray(local) ? local : [])];
-      const safe = combined.filter((item: any, index: number, all: any[]) => all.findIndex((candidate: any) => String(candidate?.id) === String(item?.id)) === index);
+      const safe = Array.isArray(server) ? server : [];
       await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(safe));
       return safe;
     } catch (e) {
@@ -227,6 +237,11 @@ export default function MengenEditorScreen({
     try {
       setLoading(true);
       const mengenList = await readMengenList();
+      // A new measurement must never silently reopen or overwrite the latest existing one.
+      if (!mengenId && !angebotId) {
+        setDoc(createEmptyDoc({ projectId, projectCode, angebotId: null }));
+        return;
+      }
       if (mengenId) {
         const found = mengenList.find((x: any) => String(x?.id) === String(mengenId));
         if (found) {
@@ -374,25 +389,46 @@ export default function MengenEditorScreen({
       updatedAt: Date.now(),
       rows: Array.isArray(base.rows) && base.rows.length ? base.rows.map((r: any, i: number) => normalizeMengenRow(r, i)) : [normalizeMengenRow({}, 0)]
     };
-    const raw = await AsyncStorage.getItem(KEY + projectCode);
-    const list = raw ? JSON.parse(raw) : [];
-    const next = Array.isArray(list) ? list : [];
-    const idx = next.findIndex((x: any) => String(x.id) === String(normalized.id));
-    if (idx >= 0) next[idx] = normalized;else next.unshift(normalized);
-    await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(next));
-    await submitToEingangPruefung({
-      type: "MENGENERMITTLUNG",
-      projectKey: normalized.projectCode || projectCode,
-      projectId: normalized.projectId || projectId,
-      projectCode: normalized.projectCode || projectCode,
-      title: normalized.title || "Mengenermittlung",
-      doc: normalized,
-      pdfUri: normalized.pdfUri || null,
-      status: "EINGEREICHT",
-      sourceScreen: "MengenEditor"
-    });
-    setDoc(normalized);
-    return normalized;
+    const writeCache = async (value: any) => {
+      const raw = await AsyncStorage.getItem(KEY + projectCode);
+      const list = raw ? JSON.parse(raw) : [];
+      const next = Array.isArray(list) ? [...list] : [];
+      const idx = next.findIndex((x: any) => String(x.id) === String(value.id));
+      if (idx >= 0) next[idx] = value; else next.unshift(value);
+      await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(next));
+    };
+
+    if (await getMode() === "NUR_APP") {
+      await writeCache(normalized);
+      setDoc(normalized);
+      return normalized;
+    }
+
+    try {
+      const response = await api.saveMengen(projectCode, {
+        ...normalized,
+        baseVersion: Number(normalized.version || 0),
+      });
+      const serverDoc = response?.document;
+      if (!response?.ok || !serverDoc?.id) throw new Error("MENGEN_SERVER_SAVE_NOT_CONFIRMED");
+      await writeCache(serverDoc);
+      setDoc(serverDoc);
+      return serverDoc;
+    } catch (error: any) {
+      if (String(error?.message || error).includes("VERSION_CONFLICT")) throw error;
+      // Temporary offline fallback: cache and queue the exact versioned document for retry.
+      await writeCache(normalized);
+      await queueAdd({
+        kind: "MENGEN_SYNC",
+        projectId: projectCode,
+        dedupeKey: `mengen:${normalized.id}`,
+        payload: { doc: { ...normalized, baseVersion: Number(normalized.version || 0) } },
+      } as any);
+      // The offline queue is retried by the regular synchronizer.
+      // Never block UI/pdf actions waiting for the entire project queue.
+      setDoc(normalized);
+      return normalized;
+    }
   }
   async function save() {
     try {
@@ -402,6 +438,28 @@ export default function MengenEditorScreen({
     } catch (e) {
       console.log("SAVE MENGEN ERROR", e);
       Alert.alert("Fehler", "Speichern fehlgeschlagen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function submitMengen() {
+    try {
+      setBusy(true);
+      const normalized = await persistDoc();
+      await submitToEingangPruefung({
+        type: "MENGENERMITTLUNG",
+        projectKey: normalized.projectCode || projectCode,
+        projectId: normalized.projectId || projectId,
+        projectCode: normalized.projectCode || projectCode,
+        title: normalized.title || "Mengenermittlung",
+        doc: normalized,
+        pdfUri: normalized.pdfUri || null,
+        status: "EINGEREICHT",
+        sourceScreen: "MengenEditor"
+      });
+      Alert.alert("Mengenermittlung", "Zur Eingangsprüfung eingereicht.");
+    } catch (error: any) {
+      Alert.alert("Einreichen fehlgeschlagen", String(error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -600,6 +658,10 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : prev?.note,
 
         <Pressable style={s.save} onPress={save} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? "Bitte warten..." : "Speichern"}</Text>
+        </Pressable>
+
+        <Pressable style={s.save} onPress={submitMengen} disabled={busy}>
+          <Text style={s.btnTxt}>{busy ? "Bitte warten..." : "Zur Eingangsprüfung einreichen"}</Text>
         </Pressable>
 
         <Pressable style={s.rechnung} onPress={createRechnung} disabled={busy}>

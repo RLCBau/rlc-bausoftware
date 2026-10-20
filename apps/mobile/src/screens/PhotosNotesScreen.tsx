@@ -212,13 +212,10 @@ async function persistToProjectFileUri(params: {
   const ext = isPhUri(input) || shouldConvertToJpegByExt(ext0) || converted !== input ? "jpg" : ext0;
   const fileNameSafeBase = String(nameHint || "").trim().replace(/[\/\\?%*:|"<>]/g, "-").replace(/\s+/g, "_").slice(0, 80) || "";
   const baseName = fileNameSafeBase ? fileNameSafeBase.replace(/\.(\w{1,6})$/, "") : `${prefix || "f"}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-  const target = `${dir}${baseName}.${ext}`;
+  // Never overwrite a prior attachment with the same name.
+  const uniqueName = `${baseName}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
+  const target = `${dir}${uniqueName}.${ext}`;
   try {
-    try {
-      await FileSystem.deleteAsync(target, {
-        idempotent: true
-      });
-    } catch {}
     await FileSystem.copyAsync({
       from: converted,
       to: target
@@ -226,11 +223,7 @@ async function persistToProjectFileUri(params: {
     return target.startsWith("file://") ? target : `file://${target}`;
   } catch (e: any) {
     const msg = String(e?.message || e);
-    console.log("[PHOTOS] persistToProjectFileUri FAILED:", msg, {
-      input,
-      converted,
-      target
-    });
+    console.warn("[PHOTOS] attachment persistence failed:", msg);
     if (isFileUri(converted)) return converted;
     return input;
   }
@@ -904,7 +897,7 @@ export default function PhotosNotesScreen({
         return;
       }
       await queueNormalizeExisting();
-      await queueAdd({
+      const queuedPhoto = await queueAdd({
         kind: "PHOTO_NOTE",
         projectId: baKey,
         payload: {
@@ -921,22 +914,6 @@ export default function PhotosNotesScreen({
           files: Array.isArray(row?.files) ? row.files : Array.isArray(row?.attachments) ? row.attachments : []
         }
       });
-      try {
-        const s = await queueStats();
-        const list = await queueList();
-        console.log("QUEUE_STATS", s);
-        console.log("QUEUE_ITEMS", list.slice(0, 10).map(x => ({
-          id: x.id,
-          kind: x.kind,
-          projectId: x.projectId,
-          status: x.status,
-          tries: x.tries,
-          nextTryAt: x.nextTryAt,
-          error: x.error
-        })));
-      } catch (e: any) {
-        console.log("QUEUE_DEBUG_FAILED", String(e?.message || e));
-      }
       await queueProcessPending(async (item: QueueItem) => {
         if (item.kind !== "PHOTO_NOTE" && item.kind !== "FOTOS_NOTIZEN") {
           return null;
@@ -948,8 +925,12 @@ export default function PhotosNotesScreen({
           throw new Error(`PHOTO_NOTE push: missing BA projectCode (got '${ba}')`);
         }
         return await (api as any).pushPhotosToServer(ba, r);
-      });
-      Alert.alert("Einreichen", "Eingereicht + Server gespeichert (Eingangsprüfung).");
+      }, { projectId: baKey, kinds: ["PHOTO_NOTE", "FOTOS_NOTIZEN"] });
+      const persistedItem = (await queueList()).find(item => item.id === queuedPhoto.id);
+      const serverSaved = persistedItem?.status === "DONE";
+      Alert.alert("Einreichen", serverSaved
+        ? "Eingereicht + Server gespeichert (Eingangsprüfung)."
+        : "Lokal gespeichert. Server-Sync steht noch aus; erneuter Versuch über Sync Queue.");
       if (!fromInbox) navigation.goBack();
     } catch (e: any) {
       Alert.alert("Einreichen", e?.message || "Einreichen fehlgeschlagen.");

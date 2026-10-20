@@ -1,3 +1,4 @@
+import { getAuthMode } from "../auth";
 import { renderMobilePdfViaServer } from "../mobilePdfCore";
 // apps/mobile/src/lib/exporters/projectExport.ts
 import * as FileSystem from "expo-file-system/legacy";
@@ -3674,6 +3675,7 @@ export async function exportRegiePdfToProject(input: ExportRegieInput): Promise<
       payload: input,
     });
   } catch (error: any) {
+    if (await getAuthMode() === "SERVER_SYNC") throw new Error(`RLC PDF Core (Server) nicht erreichbar: ${String(error?.message || error)}`);
     devLog("[RLC PDF CORE] Regie fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
@@ -3694,6 +3696,7 @@ export async function exportLieferscheinPdfToProject(input: ExportLsInput): Prom
       payload: input,
     });
   } catch (error: any) {
+    if (await getAuthMode() === "SERVER_SYNC") throw new Error(`RLC PDF Core (Server) nicht erreichbar: ${String(error?.message || error)}`);
     devLog("[RLC PDF CORE] Lieferschein fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
@@ -3714,6 +3717,7 @@ export async function exportPhotosPdfToProject(input: ExportPhotosInput): Promis
       payload: input,
     });
   } catch (error: any) {
+    if (await getAuthMode() === "SERVER_SYNC") throw new Error(`RLC PDF Core (Server) nicht erreichbar: ${String(error?.message || error)}`);
     devLog("[RLC PDF CORE] Fotos fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
@@ -3736,6 +3740,7 @@ export async function exportTagesberichtPdfToProject(
       payload: input,
     });
   } catch (error: any) {
+    if (await getAuthMode() === "SERVER_SYNC") throw new Error(`RLC PDF Core (Server) nicht erreichbar: ${String(error?.message || error)}`);
     devLog("[RLC PDF CORE] Tagesbericht fallback lokal:", String(error?.message || error));
   }
   return exportUnifiedRegieModelPdf({
