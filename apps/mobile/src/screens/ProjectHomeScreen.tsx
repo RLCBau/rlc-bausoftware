@@ -510,12 +510,7 @@ export default function ProjectHomeScreen({
     } catch (e: any) {
       console.error("openProjectPdfs ERROR:", e);
       setPdfOpen(false);
-      const offKey = (await requireOfflineFsKey()) || String(projectKey).trim();
-      navigation.navigate("ProjectPdfs" as any, {
-        projectFsKey: offKey,
-        title: "Projekt PDFs (Offline)"
-      });
-      Alert.alert("PDFs (Offline)", `Keine Verbindung oder kein Zugriff auf Server-PDFs.\n\nFehler: ${String(e?.message || e || "unbekannt")}`);
+      Alert.alert("Projekt PDFs – Serverfehler", `Die PDF-Liste konnte nicht vom Server geladen werden.\n\n${String(e?.message || e || "Unbekannter Fehler")}\n\nBitte Anmeldung und Projektzugriff prüfen.`);
     } finally {
       setPdfBusy(false);
     }
