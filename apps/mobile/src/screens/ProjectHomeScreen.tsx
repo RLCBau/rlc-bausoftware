@@ -148,6 +148,7 @@ export default function ProjectHomeScreen({
   const brandingSyncedRef = useRef(false);
   const focusLoadAtRef = useRef(0);
   const [pdfOpen, setPdfOpen] = useState(false);
+  const [pendingPdfView, setPendingPdfView] = useState<{ uri: string; title: string } | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfItems, setPdfItems] = useState<ProjectPdfItem[]>([]);
   const [pdfBusyMap, setPdfBusyMap] = useState<Record<string, boolean>>({});
@@ -523,14 +524,13 @@ export default function ProjectHomeScreen({
         const local = await getLocalUri(localKey, pdfCacheName(item));
         if (local) {
           try {
-            navigation.navigate("PdfViewer" as any, {
-              uri: local,
-              title: item.name
-            });
+            setPendingPdfView({ uri: local, title: item.name });
+            setPdfOpen(false);
             return;
           } catch {}
           const okLocal = await Linking.canOpenURL(local);
           if (okLocal) {
+            setPdfOpen(false);
             await Linking.openURL(local);
             return;
           }
@@ -557,7 +557,8 @@ export default function ProjectHomeScreen({
       if (!url) throw new Error("PDF URL fehlt");
       const downloaded = await downloadPdf(fsKey, pdfCacheName(item), url);
       setPdfOfflineMap(prev => ({ ...prev, [item.name]: true }));
-      navigation.navigate("PdfViewer" as any, { uri: downloaded, title: item.name });
+      setPendingPdfView({ uri: downloaded, title: item.name });
+      setPdfOpen(false);
     } catch (e: any) {
       Alert.alert("PDF öffnen", e?.message || "PDF konnte nicht geöffnet werden.");
     }
@@ -1072,7 +1073,11 @@ export default function ProjectHomeScreen({
 
             <View style={s._inline22} />
 
-            <Modal visible={pdfOpen} transparent animationType="fade" onRequestClose={() => setPdfOpen(false)}>
+            <Modal visible={pdfOpen} transparent animationType="fade" onRequestClose={() => setPdfOpen(false)} onDismiss={() => {
+              if (!pendingPdfView) return;
+              navigation.navigate("PdfViewer" as any, pendingPdfView);
+              setPendingPdfView(null);
+            }}>
               <View style={s.pdfBackdrop}>
                 <View style={s.pdfCard}>
                   <View style={s._inline23}>
@@ -1108,22 +1113,14 @@ export default function ProjectHomeScreen({
 
                           <View style={s.pdfActions}>
                             {offline ? <>
-                                <View style={s.badgeOffline}>
-                                  <Text style={s.badgeOfflineTxt}>Offline</Text>
-                                </View>
-                                <Pressable style={[s.btnDangerSmall, busy ? {
-                          opacity: 0.6
-                        } : null]} onPress={() => deletePdfItem(item)} disabled={busy}>
-                                  <Text style={s.btnTxtWhite}>
-                                    {busy ? "..." : "X"}
-                                  </Text>
+                                <Pressable style={[s.btnPrimarySmall, busy ? { opacity: 0.6 } : null]} onPress={() => openPdfItem(item)} disabled={busy}>
+                                  <Text style={s.btnTxtWhite}>Öffnen</Text>
                                 </Pressable>
-                              </> : <Pressable style={[s.btnPrimarySmall, busy ? {
-                        opacity: 0.6
-                      } : null]} onPress={() => downloadPdfItem(item)} disabled={busy}>
-                                <Text style={s.btnTxtWhite}>
-                                  {busy ? "..." : "Download"}
-                                </Text>
+                                <Pressable style={[s.btnDangerSmall, busy ? { opacity: 0.6 } : null]} onPress={() => deletePdfItem(item)} disabled={busy}>
+                                  <Text style={s.btnTxtWhite}>{busy ? "..." : "X"}</Text>
+                                </Pressable>
+                              </> : <Pressable style={[s.btnPrimarySmall, busy ? { opacity: 0.6 } : null]} onPress={() => downloadPdfItem(item)} disabled={busy}>
+                                <Text style={s.btnTxtWhite}>{busy ? "..." : "Download"}</Text>
                               </Pressable>}
                           </View>
                         </View>;
