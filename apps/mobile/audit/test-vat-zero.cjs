@@ -1,0 +1,10 @@
+const assert=require("node:assert/strict");
+const fs=require("node:fs"),path=require("node:path");
+const invoice=fs.readFileSync(path.resolve(__dirname,"../src/screens/RechnungEditorScreen.tsx"),"utf8");
+const advance=fs.readFileSync(path.resolve(__dirname,"../src/screens/AbschlagEditorScreen.tsx"),"utf8");
+assert(!/mwstPct\s*\|\|\s*["']19/.test(invoice));
+assert(!/mwstPct\s*\|\|\s*["']19/.test(advance));
+const fallback=(rate)=>rate ?? "19";
+for(const zero of [0,"0","0,0"])assert.notEqual(fallback(zero),"19");
+assert.equal(fallback(undefined),"19");
+console.log("PASS 0% VAT preserved in Rechnung and Abschlag defaults");

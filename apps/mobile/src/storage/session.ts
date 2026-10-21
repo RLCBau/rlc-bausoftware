@@ -1,10 +1,14 @@
 ﻿import { getJson, setJson } from "../lib/storage";
 
 export type SessionRole =
+  | "ADMIN"
   | "BAULEITER"
   | "BUERO"
   | "KALKULATOR"
   | "POLIER"
+  | "VORARBEITER"
+  | "MASCHINIST"
+  | "VERMESSER"
   | "FAHRER"
   | "MITARBEITER";
 

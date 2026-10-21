@@ -1,4 +1,5 @@
 import { renderMobilePdfViaServer } from "../mobilePdfCore";
+import { getAuthMode } from "../auth";
 // apps/mobile/src/lib/exporters/documentPdfBuilder.ts
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
@@ -102,7 +103,16 @@ function esc(v: any) {
 }
 
 function num(v: string | number | null | undefined) {
-  return Number(String(v ?? "").replace(",", ".") || 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v ?? "").trim().replace(/\s/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
+  const result = Number(normalized);
+  return Number.isFinite(result) ? result : 0;
 }
 
 function money(v: number) {
@@ -310,7 +320,7 @@ function renderRows(rows?: PdfRow[], showFormulaColumn?: boolean) {
         <tbody>
           ${safeRows
             .map((r) => {
-              const qty = num(r.qty);
+              const qty = num(r.qty ?? (r as any).quantity);
               const ep = num(r.ep);
               const gp = r.gp !== undefined ? num(r.gp) : qty * ep;
 
@@ -742,6 +752,12 @@ export async function buildDocumentPdf(input: BuildDocumentPdfInput) {
     });
     return { pdfUri: serverResult.pdfUri, html: "" };
   } catch (error: any) {
+    // In SERVER_SYNC do not silently substitute the legacy local template for
+    // customer-facing/fiscal documents: this hides missing data or wrong layout.
+    const mode = await getAuthMode();
+    if (mode === "SERVER_SYNC") {
+      throw new Error(`RLC PDF Core (Server) nicht erreichbar: ${String(error?.message || error)}`);
+    }
     console.log(
       "[RLC PDF CORE] Zentraler Renderer nicht verfügbar, lokaler Core:",
       String(error?.message || error)

@@ -12,6 +12,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { api, looksLikeProjectCode } from "../lib/api";
+import { getServerToken } from "../lib/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { exportRegiePdfToProject, emailPdf } from "../lib/exporters/projectExport";
 import { hydrateRowForPreview } from "../lib/hydratePreview";
@@ -267,21 +268,17 @@ async function persistToProjectFileUri(params: {
   const ext = isPhUri(input) || shouldConvertToJpegByExt(ext0) || converted !== input ? "jpg" : ext0;
   const fileNameSafeBase = String(nameHint || "").trim().replace(/[\/\\?%*:|"<>]/g, "-").replace(/\s+/g, "_").slice(0, 80) || "";
   const baseName = fileNameSafeBase ? fileNameSafeBase.replace(/\.(\w{1,6})$/, "") : `${prefix || "f"}_${Date.now()}_${Math.floor(Math.random() * 1e9)}`;
-  const target = `${dir}${baseName}.${ext}`;
+  // Allegati omonimi non devono sovrascriversi (né perdere il precedente).
+  const unique = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const target = `${dir}${baseName}_${unique}.${ext}`;
   try {
-    try {
-      await FileSystem.deleteAsync(target, {
-        idempotent: true
-      });
-    } catch {}
     await FileSystem.copyAsync({
       from: converted,
       to: target
     });
     return target.startsWith("file://") ? target : `file://${target}`;
   } catch {
-    if (isFileUri(converted)) return converted;
-    return input;
+    throw new Error("ANHANG_NICHT_DAUERHAFT_GESPEICHERT");
   }
 }
 async function pickImageFromLibrary(): Promise<DateiMeta | null> {
@@ -409,7 +406,7 @@ function normalizeKiResult(raw: any) {
   };
 }
 async function serverReadRegieInbox(projectFsKey: string, docId: string) {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getServerToken();
   let base = "";
   try {
     base = String((api as any)?.getApiUrl ? await (api as any).getApiUrl() : (api as any)?.apiUrl || "").replace(/\/$/, "");
@@ -570,7 +567,7 @@ export default function RegieScreen({
   }, []);
   const readAuthToken = useCallback(async () => {
     try {
-      const t = String((await AsyncStorage.getItem("auth_token")) || "").trim();
+      const t = String((await getServerToken()) || "").trim();
       setAuthToken(t);
     } catch {
       setAuthToken("");
@@ -784,7 +781,8 @@ export default function RegieScreen({
           nameHint: f.name || `camera_${Date.now()}.jpg`,
           typeHint: f.type || "image/jpeg",
           prefix: "att"
-        });
+        }).catch(() => "");
+        if (!persisted) { Alert.alert("Anhang", "Datei konnte nicht dauerhaft gespeichert werden."); return; }
         setRow(r => ({
           ...r,
           attachments: normalizeFiles([...(r.attachments || []), {
@@ -805,7 +803,8 @@ export default function RegieScreen({
           nameHint: f.name || `photo_${Date.now()}.jpg`,
           typeHint: f.type || "image/jpeg",
           prefix: "att"
-        });
+        }).catch(() => "");
+        if (!persisted) { Alert.alert("Anhang", "Datei konnte nicht dauerhaft gespeichert werden."); return; }
         setRow(r => ({
           ...r,
           attachments: normalizeFiles([...(r.attachments || []), {
@@ -826,7 +825,8 @@ export default function RegieScreen({
           nameHint: f.name || `file_${Date.now()}`,
           typeHint: f.type || "application/octet-stream",
           prefix: "file"
-        });
+        }).catch(() => "");
+        if (!persisted) { Alert.alert("Anhang", "Datei konnte nicht dauerhaft gespeichert werden."); return; }
         setRow(r => ({
           ...r,
           attachments: normalizeFiles([...(r.attachments || []), {
@@ -1136,22 +1136,19 @@ export default function RegieScreen({
             comment: cleanTaetigkeit
           };
         });
-        const filteredWarnings = Array.isArray(parsed.warnings) ? parsed.warnings.filter((w: string) => {
-          const s = String(w || "").toLowerCase();
-          if (s.includes("datum fehlt")) return false;
-          if (s.includes("keine mitarbeiter") && lines.some((x: any) => x.worker || x.machine || x.material)) return false;
-          return true;
-        }) : [];
-        const warnings = filteredWarnings.length ? `
-
-RLC KI Hinweise:
-${filteredWarnings.map((w: string) => `- ${w}`).join("\n")}` : "";
+        // KI extraction must not overwrite existing form values or persist stale validation warnings.
+        // Validate at submission time against the final form instead.
         return {
           ...r,
           date: toIsoDate(parsed.datum || r.date),
+          arbeitsbeginn: String(parsed.arbeitsbeginn || r.arbeitsbeginn || ""),
+          arbeitsende: String(parsed.arbeitsende || r.arbeitsende || ""),
+          pause1: String(parsed.pause1 || r.pause1 || ""),
+          pause2: String(parsed.pause2 || r.pause2 || ""),
           wetter: parsed.wetter || r.wetter || "",
-          bemerkungen: `${cleanTaetigkeit}${warnings}`,
-          rows: lines,
+          kostenstelle: parsed.kostenstelle || r.kostenstelle || "",
+          bemerkungen: cleanTaetigkeit,
+          rows: lines.some(x => x.worker || x.machine || x.material || x.comment !== "Regiearbeiten") ? lines : r.rows,
           updatedAt: Date.now()
         };
       });

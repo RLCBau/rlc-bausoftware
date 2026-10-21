@@ -1,3 +1,4 @@
+import { getAuthMode } from "../auth";
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
 import { RLC_PDF_FONT_STACK, loadRlcPdfBranding } from "./pdfBranding";
@@ -68,6 +69,7 @@ export async function buildBlueDocumentPdf(input: Input) {
 
     return { pdfUri: serverResult.pdfUri, html: "", source: "server" as const };
   } catch (error: any) {
+    if (await getAuthMode() === "SERVER_SYNC") throw new Error(`RLC PDF Core (Server) nicht erreichbar: ${String(error?.message || error)}`);
     console.log(
       `[RLC PDF CORE] ${documentType} server renderer unavailable; using local Mengenermittlung template:`,
       String(error?.message || error)

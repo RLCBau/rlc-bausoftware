@@ -1,3 +1,4 @@
+import { getAuthMode } from "../auth";
 import { renderMobilePdfViaServer } from "../mobilePdfCore";
 import * as Print from "expo-print";
 import * as FileSystem from "expo-file-system/legacy";
@@ -393,6 +394,7 @@ export async function buildSchlussrechnungPdf(input: Input) {
     });
     return { pdfUri: serverResult.pdfUri, html: "" };
   } catch (error: any) {
+    if (await getAuthMode() === "SERVER_SYNC") throw new Error(`RLC PDF Core (Server) nicht erreichbar: ${String(error?.message || error)}`);
     console.log("[RLC PDF CORE] Schlussrechnung fallback lokal:", String(error?.message || error));
   }
 

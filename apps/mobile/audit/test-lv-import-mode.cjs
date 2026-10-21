@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const s=fs.readFileSync(path.resolve(__dirname,'../src/screens/LvImportScreen.tsx'),'utf8');
+assert(s.includes('AsyncStorage.getItem("rlc_mobile_mode")'));
+assert(s.includes('const offlineMode = appMode === "NUR_APP"'));
+assert(!s.includes('const offlineMode = !hasServerProjectCode'));
+assert(s.includes('if (!appMode) { Alert.alert("LV Import"'));
+assert(!s.includes('buildSyntheticPayloadForBinaryFile'));
+assert(s.includes('Die Originaldatei wird vom Server'));
+assert(s.includes('projectCode: String(projectCode).trim()'));
+console.log('PASS LV import: explicit app mode, no fabricated positions, independent server parser');

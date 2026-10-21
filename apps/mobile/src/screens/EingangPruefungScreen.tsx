@@ -15,6 +15,7 @@ import { hydrateRowForPreview } from "../lib/hydratePreview";
 
 // API
 import { api } from "../lib/api";
+import { getServerToken } from "../lib/auth";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { buildBautagebuchPdf } from "../lib/exporters/bautagebuchPdfBuilder";
 
@@ -115,6 +116,7 @@ const INBOX_KEY_RECHNUNG = (projectKey: string) => `rlc_mobile_inbox_rechnung:${
 const INBOX_KEY_ABSCHLAG = (projectKey: string) => `rlc_mobile_inbox_abschlag:${projectKey}`;
 const INBOX_KEY_MENGEN = (projectKey: string) => `rlc_mobile_inbox_mengen:${projectKey}`;
 const INBOX_KEY_KALKULATION = (projectKey: string) => `rlc_mobile_inbox_kalkulation:${projectKey}`;
+const INBOX_KEY_OUTLIER = (projectKey: string) => `rlc_mobile_inbox_outlier:${projectKey}`;
 const INBOX_KEYS_LS = (projectKey: string) => [`rlc_mobile_inbox_lieferschein:${projectKey}`, `rlc_mobile_inbox_ls:${projectKey}`];
 async function loadLsCompat(projectKey: string): Promise<InboxLs[]> {
   const parts = await Promise.all(INBOX_KEYS_LS(projectKey).map(k => loadList<InboxLs[]>(k, [])));
@@ -287,7 +289,7 @@ function splitEmails(v: any): string[] {
  * Server request helper (token + JSON)
  * ========================= */
 async function serverRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getServerToken();
   const headers: Record<string, string> = {
     ...(init.headers as any)
   };
@@ -338,7 +340,7 @@ async function downloadToCacheIfNeeded(uriRaw: string, nameHint?: string): Promi
   const isHttp = /^https?:\/\//i.test(uri);
   const isRel = uri.startsWith("/");
   if (!isHttp && !isRel) return uri;
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getServerToken();
   const base = await getApiBase();
   const url = isHttp ? uri : `${base}${uri}`;
   const cacheDir = `${FileSystem.cacheDirectory || FileSystem.documentDirectory || ""}rlc_inbox_cache/`;
@@ -631,7 +633,7 @@ export default function EingangPruefungScreen({
     if (looksLikeProjectCode(c)) return c;
     return a || b || c || "—";
   }, [pk, projectCode, projectId]);
-  type InboxTab = "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT" | "BAUTAGEBUCH" | "ANGEBOT" | "RECHNUNG" | "ABSCHLAGSRECHNUNG" | "MENGEN" | "KALKULATION" | "ARBEITSZEIT";
+  type InboxTab = "REGIE" | "LS" | "FOTOS" | "TAGESBERICHT" | "BAUTAGEBUCH" | "ANGEBOT" | "RECHNUNG" | "ABSCHLAGSRECHNUNG" | "MENGEN" | "KALKULATION" | "ARBEITSZEIT" | "OUTLIER_REPORT";
   const [tab, setTab] = useState<InboxTab>("REGIE");
   const [busy, setBusy] = useState(false);
   const [regie, setRegie] = useState<InboxRegie[]>([]);
@@ -644,6 +646,7 @@ export default function EingangPruefungScreen({
   const [abschlaege, setAbschlaege] = useState<any[]>([]);
   const [mengen, setMengen] = useState<any[]>([]);
   const [kalkulationen, setKalkulationen] = useState<any[]>([]);
+  const [outlierReports, setOutlierReports] = useState<any[]>([]);
   const [arbeitszeiten, setArbeitszeiten] = useState<any[]>([]);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -1320,7 +1323,7 @@ export default function EingangPruefungScreen({
         const result = await serverRequest<InboxListResponse<any>>(`/api/inbox/${encodeURIComponent(pk)}/${encodeURIComponent(type)}`);
         return Array.isArray(result?.items) ? result.items : [];
       };
-      const results = await Promise.allSettled([loadGeneric("ANGEBOT"), loadGeneric("RECHNUNG"), loadGeneric("ABSCHLAGSRECHNUNG"), loadGeneric("MENGENERMITTLUNG"), loadGeneric("KALKULATION"), loadGeneric("ARBEITSZEIT")]);
+      const results = await Promise.allSettled([loadGeneric("ANGEBOT"), loadGeneric("RECHNUNG"), loadGeneric("ABSCHLAGSRECHNUNG"), loadGeneric("MENGENERMITTLUNG"), loadGeneric("KALKULATION"), loadGeneric("ARBEITSZEIT"), loadGeneric("OUTLIER_REPORT")]);
       const serverItems = (index: number) => {
         const result = results[index];
         return result?.status === "fulfilled" && Array.isArray(result.value) ? result.value : [];
@@ -1331,6 +1334,7 @@ export default function EingangPruefungScreen({
       setMengen(serverItems(3));
       setKalkulationen(serverItems(4));
       setArbeitszeiten(serverItems(5));
+      setOutlierReports(serverItems(6));
       okGeneric = results.some(result => result.status === "fulfilled");
     } catch {}
     return {
@@ -2062,6 +2066,8 @@ export default function EingangPruefungScreen({
         return INBOX_KEY_MENGEN(pk);
       case "KALKULATION":
         return INBOX_KEY_KALKULATION(pk);
+      case "OUTLIER_REPORT":
+        return INBOX_KEY_OUTLIER(pk);
       default:
         return "";
     }
@@ -2086,6 +2092,9 @@ export default function EingangPruefungScreen({
       case "KALKULATION":
         setKalkulationen(list);
         return;
+      case "OUTLIER_REPORT":
+        setOutlierReports(list);
+        return;
       case "ARBEITSZEIT":
         setArbeitszeiten(list);
         return;
@@ -2105,6 +2114,8 @@ export default function EingangPruefungScreen({
         return mengen;
       case "KALKULATION":
         return kalkulationen;
+      case "OUTLIER_REPORT":
+        return outlierReports;
       case "ARBEITSZEIT":
         return arbeitszeiten;
       default:
@@ -2310,6 +2321,8 @@ export default function EingangPruefungScreen({
         return "Mengenermittlung";
       case "KALKULATION":
         return "Kalkulation";
+      case "OUTLIER_REPORT":
+        return "Outlier Report";
       case "ARBEITSZEIT":
         return "Arbeitszeit";
       default:
@@ -2636,12 +2649,18 @@ export default function EingangPruefungScreen({
     return pdfUri;
   }
   async function ensureGenericLocalPdf(t: InboxTab, item: any): Promise<string> {
-    // Generische Fachmodule niemals aus einem alten gespeicherten PDF öffnen.
-    // PDF und E-Mail verwenden dadurch immer dieselbe aktuelle RLC-Vorlage.
+    // Submitted documents are immutable. Reuse the already rendered local PDF
+    // when available: opening PDF and sending E-Mail must not trigger two slow
+    // renderer requests or produce different documents.
+    const existing = pickGenericPdfUri(item);
+    const status = String(item?.workflowStatus || item?.status || "").toUpperCase();
+    if (["EINGEREICHT", "FREIGEGEBEN", "APPROVED"].includes(status) && existing.startsWith("file://") && /\.pdf(?:$|\?)/i.test(existing)) {
+      const info = await FileSystem.getInfoAsync(existing).catch(() => null);
+      if (info?.exists && typeof info.size === "number" && info.size > 200) return existing;
+    }
     if (t === "ANGEBOT" || t === "RECHNUNG" || t === "ABSCHLAGSRECHNUNG" || t === "MENGEN" || t === "KALKULATION" || t === "BAUTAGEBUCH" || t === "ARBEITSZEIT") {
       return generateGenericPdfFromInbox(t, item);
     }
-    const existing = pickGenericPdfUri(item);
     if (existing) {
       const localUri = await downloadToCacheIfNeeded(existing, `${genericDocLabel(t)}_${genericItemId(item) || Date.now()}.pdf`);
       if (localUri) {
@@ -2842,7 +2861,7 @@ export default function EingangPruefungScreen({
     count: kalkulationen.length,
     icon: "calculator-outline"
   }];
-  const shown = tab === "REGIE" ? regie : tab === "LS" ? ls : tab === "FOTOS" ? fotos : tab === "TAGESBERICHT" ? tagesberichte : tab === "BAUTAGEBUCH" ? bautagebuch : tab === "ANGEBOT" ? angebote : tab === "RECHNUNG" ? rechnungen : tab === "ABSCHLAGSRECHNUNG" ? abschlaege : tab === "MENGEN" ? mengen : tab === "ARBEITSZEIT" ? arbeitszeiten : kalkulationen;
+  const shown = tab === "REGIE" ? regie : tab === "LS" ? ls : tab === "FOTOS" ? fotos : tab === "TAGESBERICHT" ? tagesberichte : tab === "BAUTAGEBUCH" ? bautagebuch : tab === "ANGEBOT" ? angebote : tab === "RECHNUNG" ? rechnungen : tab === "ABSCHLAGSRECHNUNG" ? abschlaege : tab === "MENGEN" ? mengen : tab === "ARBEITSZEIT" ? arbeitszeiten : tab === "OUTLIER_REPORT" ? outlierReports : kalkulationen;
   return <SafeAreaView style={s.safe}>
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={s.page}>

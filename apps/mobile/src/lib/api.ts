@@ -2268,11 +2268,10 @@ export const api = {
     });
   },
 
-  async deleteAngebot(projectIdOrCode: string, id: string): Promise<any> {
+  async deleteAngebot(projectIdOrCode: string, id: string, version: number): Promise<any> {
     const projectCode = await resolveProjectCode(projectIdOrCode);
-    return request<any>(kalkulationAngebotDeleteEndpoint(projectCode, id), {
-      method: "DELETE",
-    });
+    const endpoint = `${kalkulationAngebotDeleteEndpoint(projectCode, id)}?version=${encodeURIComponent(String(version))}`;
+    return request<any>(endpoint, { method: "DELETE" });
   },
 
   /** =========================
@@ -2298,11 +2297,10 @@ export const api = {
     });
   },
 
-  async deleteMengen(projectIdOrCode: string, id: string): Promise<any> {
+  async deleteMengen(projectIdOrCode: string, id: string, version: number): Promise<any> {
     const projectCode = await resolveProjectCode(projectIdOrCode);
-    return request<any>(kalkulationMengenDeleteEndpoint(projectCode, id), {
-      method: "DELETE",
-    });
+    const endpoint = `${kalkulationMengenDeleteEndpoint(projectCode, id)}?version=${encodeURIComponent(String(version))}`;
+    return request<any>(endpoint, { method: "DELETE" });
   },
 
   /** =========================
@@ -2669,7 +2667,7 @@ export const api = {
       fd.append("files", { uri: uploadUri, name, type });
     }
 
-    return request<any>(regieUploadEndpoint(), { method: "POST", body: fd });
+    return request<any>(`${regieUploadEndpoint()}?projectId=${encodeURIComponent(projectKey)}`, { method: "POST", body: fd });
   },
 
   async submitRegieInbox(projectIdOrCode: string, payload: any) {
@@ -2705,9 +2703,18 @@ export const api = {
 
     const photos = Array.isArray(row?.photos) ? row.photos : [];
     const attachments = Array.isArray(row?.attachments) ? row.attachments : [];
-    const all = [...attachments, ...photos].filter(Boolean);
+    const linePhotos = Array.isArray(row?.rows)
+      ? row.rows.flatMap((line: any) => Array.isArray(line?.photos) ? line.photos : []) : [];
+    const all = [...attachments, ...photos, ...linePhotos].filter(Boolean);
+    const seen = new Set<string>();
+    const unique = all.filter((f: any) => {
+      const uri = String(f?.uri || f?.url || f?.publicUrl || "").trim();
+      if (!uri || seen.has(uri)) return false;
+      seen.add(uri);
+      return true;
+    });
 
-    const { namedAll, localFiles, localByOrder } = buildNamedLocalFiles(all, "regie");
+    const { namedAll, localFiles, localByOrder } = buildNamedLocalFiles(unique, "regie");
 
     let uploadRes: any = null;
     if (localFiles.length) {
@@ -2718,10 +2725,8 @@ export const api = {
       ? uploadRes.files
       : [];
 
-    if (localFiles.length && !uploadedFiles.length) {
-      throw new Error(
-        "Regie Upload fehlgeschlagen: Server hat keine Dateien zurückgegeben."
-      );
+    if (localFiles.length && (uploadRes?.ok !== true || uploadedFiles.length !== localFiles.length)) {
+      throw new Error("REGIE_UPLOAD_INCOMPLETE");
     }
 
     const attachmentsFinal = namedAll.map((p: any) => {
@@ -2764,6 +2769,7 @@ export const api = {
     };
 
     const submitRes = await api.submitRegieInbox(projectKey, submitPayload);
+    if (submitRes?.ok !== true || !submitRes?.docId) throw new Error("REGIE_INBOX_NOT_CONFIRMED");
     return { ...submitRes, attachments: attachmentsFinal, uploadRes };
   },
 
@@ -2986,7 +2992,7 @@ async tagesberichtApprove(
       fd.append("files", { uri: uploadUri, name, type });
     }
 
-    return request<any>(lsInboxUploadEndpoint(), { method: "POST", body: fd });
+    return request<any>(`${lsInboxUploadEndpoint()}?projectId=${encodeURIComponent(projectKey)}`, { method: "POST", body: fd });
   },
 
   async lsInboxList(projectIdOrCode: string) {
@@ -3043,7 +3049,7 @@ async tagesberichtApprove(
       fd.append("files", { uri: uploadUri, name, type });
     }
 
-    return request<any>(lsLegacyUploadEndpoint(), { method: "POST", body: fd });
+    return request<any>(`${lsLegacyUploadEndpoint()}?projectId=${encodeURIComponent(projectKey)}`, { method: "POST", body: fd });
   },
 
   async commitLieferscheinLegacy(projectIdOrCode: string, payload: any) {
@@ -3079,12 +3085,13 @@ async tagesberichtApprove(
       });
     } catch (e: any) {
       if (looksLikeMissingEndpoint(e)) {
-        return api.pushLieferscheinToServerLegacy(projectKey, row);
+        throw new Error("LIEFERSCHEIN_INBOX_ENDPOINT_UNAVAILABLE");
       }
       throw e;
     }
 
-    const docId = String(submitRes?.docId || row?.id || "").trim();
+    if (submitRes?.ok !== true) throw new Error("LIEFERSCHEIN_INBOX_NOT_CONFIRMED");
+    const docId = String(submitRes?.docId || "").trim();
     if (!docId) {
       throw new Error("Lieferschein submit fehlgeschlagen: docId fehlt.");
     }
@@ -3108,10 +3115,8 @@ async tagesberichtApprove(
         metaForInbox
       );
       inboxItems = Array.isArray(uploadRes?.items) ? uploadRes.items : [];
-      if (!inboxItems.length) {
-        throw new Error(
-          "Lieferschein Upload (Inbox) fehlgeschlagen: Server hat keine items zurückgegeben."
-        );
+      if (uploadRes?.ok !== true || inboxItems.length !== localFiles.length) {
+        throw new Error("LIEFERSCHEIN_INBOX_UPLOAD_INCOMPLETE");
       }
     }
 

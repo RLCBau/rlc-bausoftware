@@ -1,0 +1,13 @@
+const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),ts=require("typescript");
+const source=fs.readFileSync(path.resolve(__dirname,"../src/screens/MengenEditorScreen.tsx"),"utf8").replace(/\r\n/g,"\n");
+const parser=source.match(/function num\(v: string \| number \| null \| undefined\) \{[\s\S]*?\n\}/);assert(parser,"Mengen parser missing");
+const num=new Function(ts.transpileModule(parser[0],{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText+";return num;")();
+for(const [v,w] of [["1.234,56",1234.56],["12.5",12.5],["-2,50",-2.5],["",0]])assert.equal(num(v),w);
+const fromLoad=source.slice(source.indexOf("async function load() {"),source.indexOf("function updateRow("));
+assert(fromLoad.indexOf("if (!mengenId && !angebotId)") < fromLoad.indexOf("if (mengenId)"),"new must branch before existing document lookup");
+assert.match(fromLoad,/setDoc\(createEmptyDoc\(\{ projectId, projectCode, angebotId: null \}\)\)/);
+const persist=source.slice(source.indexOf("async function persistDoc("),source.indexOf("async function save()"));
+assert.match(persist,/const next = Array\.isArray\(list\) \? \[\.\.\.list\] : \[\]/);
+assert(!persist.includes("submitToEingangPruefung"),"draft must not submit");
+assert.match(source,/onPress=\{submitMengen\}/);
+console.log("PASS Mengen: fresh draft, existing document route, amount parser, isolated submit");

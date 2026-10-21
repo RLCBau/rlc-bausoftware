@@ -1,0 +1,10 @@
+const fs=require('node:fs');const assert=require('node:assert/strict');const path=require('node:path');const root=path.resolve(__dirname,'..');
+const storage=fs.readFileSync(path.join(root,'src/lib/pdfStorage.ts'),'utf8');
+const auth=fs.readFileSync(path.join(root,'src/lib/auth.ts'),'utf8');
+const eas=JSON.parse(fs.readFileSync(path.join(root,'eas.json'),'utf8'));
+assert.match(storage,/readAsStringAsync\(savedUri,\s*\{[\s\S]{0,120}position:\s*0,[\s\S]{0,60}length:\s*5,/);
+assert.match(storage,/!signature\.startsWith\("JVBERi0"\)/);
+assert.doesNotMatch(auth,/process\.env\.EXPO_PUBLIC_DEV_ADMIN_KEY/);
+assert.doesNotMatch(JSON.stringify(eas.build.production.env||{}),/ADMIN_KEY|SECRET|TOKEN|PASSWORD/i);
+assert.match(auth,/ADMIN_LOGIN_DISABLED_IN_PROD/);
+console.log('PASS release security gates: streaming PDF signature and no public admin key');

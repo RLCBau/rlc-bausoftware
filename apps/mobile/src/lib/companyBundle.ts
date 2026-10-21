@@ -79,35 +79,42 @@ async function ensureDir() {
   }
 }
 
+async function readSecretMigrating(key: string): Promise<string> {
+  try {
+    const secure = String((await SecureStore.getItemAsync(key)) || "").trim();
+    if (secure) {
+      await AsyncStorage.removeItem(key).catch(() => {});
+      return secure;
+    }
+  } catch {}
+
+  try {
+    const legacy = String((await AsyncStorage.getItem(key)) || "").trim();
+    if (!legacy) return "";
+    try {
+      await SecureStore.setItemAsync(key, legacy);
+      await AsyncStorage.removeItem(key);
+    } catch {
+      // Device ohne SecureStore: Legacy-Fallback bleibt nutzbar.
+    }
+    return legacy;
+  } catch {
+    return "";
+  }
+}
+
 async function getBundleSecret(): Promise<string> {
-  // 1) preferisci license offline se presente
-  try {
-    const s = await SecureStore.getItemAsync(OFFLINE_LICENSE_KEY);
-    if (s && s.trim()) return s.trim();
-  } catch {}
-  try {
-    const s = await AsyncStorage.getItem(OFFLINE_LICENSE_KEY);
-    if (s && s.trim()) return s.trim();
-  } catch {}
+  const licensed = await readSecretMigrating(OFFLINE_LICENSE_KEY);
+  if (licensed) return licensed;
 
-  // 2) fallback: secret locale stabile
-  try {
-    const s = await SecureStore.getItemAsync(FALLBACK_SECRET_KEY);
-    if (s && s.trim()) return s.trim();
-  } catch {}
-  try {
-    const s = await AsyncStorage.getItem(FALLBACK_SECRET_KEY);
-    if (s && s.trim()) return s.trim();
-  } catch {}
+  const local = await readSecretMigrating(FALLBACK_SECRET_KEY);
+  if (local) return local;
 
-  // 3) genera e persisti
   const gen = Crypto.randomUUID();
   try {
     await SecureStore.setItemAsync(FALLBACK_SECRET_KEY, gen);
   } catch {
-    try {
-      await AsyncStorage.setItem(FALLBACK_SECRET_KEY, gen);
-    } catch {}
+    await AsyncStorage.setItem(FALLBACK_SECRET_KEY, gen);
   }
   return gen;
 }

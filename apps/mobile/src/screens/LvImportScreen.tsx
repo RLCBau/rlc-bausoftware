@@ -1,13 +1,15 @@
-// apps/mobile/src/screens/LvImportScreen.tsx
-import React, { useMemo, useState } from "react";
+﻿// apps/mobile/src/screens/LvImportScreen.tsx
+import React, { useMemo, useState, useCallback } from "react";
 import { View, Text, Pressable, Alert, ScrollView, ActivityIndicator, SafeAreaView, Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList } from "../navigation/types";
 import { COLORS, createRlcStyles } from "../ui/theme";
 import { getApiUrl } from "../lib/api";
+import { getToken } from "../lib/auth";
 type Props = NativeStackScreenProps<RootStackParamList, "LvImport">;
 type ImportedItem = {
   pos?: string;
@@ -94,7 +96,12 @@ async function resolveApiBase(): Promise<string> {
 }
 function toSafeNumber(value: unknown, fallback = 0): number {
   if (value === null || value === undefined || value === "") return fallback;
-  const normalized = String(value).replace(",", ".").trim();
+  const raw = String(value).trim().replace(/\s/g, "");
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
   const n = Number(normalized);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -168,6 +175,9 @@ function parseCsvToPayload(text: string, filename?: string): ImportedPayload {
   const iME = idx(["me", "einheit", "eh", "unit"]);
   const iMenge = idx(["menge", "qty", "quantity"]);
   const iEP = idx(["ep", "einheitspreis", "preis", "einzelpreis"]);
+  if (iPos < 0 || (iKurz < 0 && iLang < 0)) {
+    throw new Error("CSV enthält keine gültigen LV-Spalten für Position und Beschreibung.");
+  }
   const items: NormalizedImportedItem[] = [];
   for (let r = 1; r < lines.length; r++) {
     const cols = parseCsvLine(lines[r], ";");
@@ -198,30 +208,30 @@ function parseXmlLikeToPayload(text: string, filename?: string): ImportedPayload
   const clean = text.replace(/\r/g, " ").replace(/\n/g, " ");
   const getTag = (src: string, tags: string[]): string => {
     for (const tag of tags) {
-      const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i");
+      const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i");
       const m = src.match(re);
       if (m?.[1]) return decodeXml(m[1]).trim();
     }
     return "";
   };
   const title = getTag(clean, ["title", "titel", "boqname", "name", "projekt", "project"]) || filename || "Importiertes LV";
-  const itemChunks = clean.match(/<(Item|Position|BoQCtgy|BoQItem|Ausschreibungsposition)\b[\s\S]*?<\/\1>/gi) || [];
+  const itemChunks = clean.match(/<(Item|Position|BoQItem|Ausschreibungsposition)\b[\s\S]*?<\/\1>/gi) || [];
   const items: NormalizedImportedItem[] = itemChunks.map((chunk: string, i: number) => {
-    const pos = getTag(chunk, ["OZ", "Ordnungszahl", "PosNr", "Positionsnummer", "Position", "Pos"]) || String(i + 1);
-    const kurz = getTag(chunk, ["Kurztext", "ShortText", "Text", "Bezeichnung", "ItemText", "Title"]) || "";
+    const pos = getTag(chunk, ["OZ", "Ordnungszahl", "PosNr", "Positionsnummer", "Position", "Pos"]) || "";
+    const kurz = getTag(chunk, ["Kurztext", "ShortText", "TextOutlTxt", "Text", "Bezeichnung", "ItemText", "Title"]) || "";
     const lang = getTag(chunk, ["Langtext", "LongText", "Beschreibung", "Description", "OutlineText"]) || "";
-    const unit = getTag(chunk, ["ME", "Einheit", "Unit", "UOM"]) || "";
+    const unit = getTag(chunk, ["QU", "ME", "Einheit", "Unit", "UOM"]) || "";
     const qty = toSafeNumber(getTag(chunk, ["Menge", "Quantity", "Qty", "Ansatz"]), 0);
-    const ep = toSafeNumber(getTag(chunk, ["EP", "Einheitspreis", "Price", "UnitPrice"]), 0);
+    const ep = toSafeNumber(getTag(chunk, ["EP", "UP", "Einheitspreis", "Price", "UnitPrice"]), 0);
     return {
-      pos: String(pos).trim() || String(i + 1),
-      text: String(kurz).trim() || String(lang).trim() || `Position ${i + 1}`,
+      pos: String(pos).trim(),
+      text: String(kurz).trim() || String(lang).trim(),
       langtext: String(lang).trim(),
       unit: String(unit).trim(),
       quantity: qty,
       ep
     };
-  }).filter((it: NormalizedImportedItem) => it.pos.trim() || it.text.trim());
+  }).filter((it: NormalizedImportedItem) => !!it.pos.trim() && !!it.text.trim());
   if (items.length) {
     return {
       title,
@@ -229,31 +239,10 @@ function parseXmlLikeToPayload(text: string, filename?: string): ImportedPayload
       items
     };
   }
-  const fallbackRows = extractLooseXmlRows(clean);
-  return {
-    title,
-    currency: "EUR",
-    items: fallbackRows
-  };
-}
-function extractLooseXmlRows(text: string): NormalizedImportedItem[] {
-  const out: NormalizedImportedItem[] = [];
-  const ozMatches = Array.from(text.matchAll(/<(OZ|Ordnungszahl|PosNr|Positionsnummer|Position|Pos)[^>]*>([\s\S]*?)<\/\1>/gi));
-  ozMatches.forEach((m, idx) => {
-    const pos = decodeXml(m[2] || "").trim() || String(idx + 1);
-    out.push({
-      pos,
-      text: `Importierte XML/GAEB-Position ${idx + 1}`,
-      langtext: "",
-      unit: "",
-      quantity: 0,
-      ep: 0
-    });
-  });
-  return out;
+  return { title, currency: "EUR", items: [] };
 }
 function decodeXml(v: string): string {
-  return String(v || "").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
+  return String(v || "").replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/\s+/g, " ").trim();
 }
 function detectFileType(name: string): SelectedType | null {
   const lower = String(name || "").toLowerCase();
@@ -342,6 +331,9 @@ async function saveOfflineLvCache(params: {
     file
   } = params;
   const fileUri = file && file.uri ? await copyFileToLocalLvFolder(projectCode || projectId, file) : undefined;
+  if (file?.uri && !fileUri) {
+    throw new Error("Originaldatei konnte nicht dauerhaft gespeichert werden. LV-Import wurde abgebrochen.");
+  }
   const cache: OfflineLvCache = {
     ok: true,
     offline: true,
@@ -378,21 +370,12 @@ async function saveOfflineLvCache(params: {
   await Promise.all([...keys.map(key => AsyncStorage.setItem(key, richPayload)), AsyncStorage.setItem(`rlc_lv_payload:${projectId}`, flatPayload), AsyncStorage.setItem(`rlc_lv_payload:${projectCode}`, flatPayload), AsyncStorage.setItem(`rlc_lv_last_import:${projectId}`, richPayload), AsyncStorage.setItem(`rlc_lv_last_import:${projectCode}`, richPayload)]);
   return cache;
 }
-function buildSyntheticPayloadForBinaryFile(type: SelectedType, file: DocumentPicker.DocumentPickerAsset): ImportedPayload {
-  const name = file.name || `import.${type}`;
-  const label = prettyType(type);
-  return {
-    title: name,
-    currency: "EUR",
-    items: [{
-      pos: "1",
-      text: `${label}-Datei importiert`,
-      langtext: `Datei "${name}" wurde lokal gespeichert. ` + `Im Offline-Modus wurde ein Platzhalter-LV angelegt, damit das Projekt direkt weiterarbeiten kann.`,
-      unit: "",
-      quantity: 1,
-      ep: 0
-    }]
-  };
+function requireRealLvPositions(payload: ImportedPayload): ImportedPayload {
+  const rows = Array.isArray(payload?.items) ? payload.items : [];
+  if (!rows.length || rows.some(item => !String(item?.pos || "").trim() || !String(item?.text || "").trim())) {
+    throw new Error("Das LV enthält keine vollständigen, erkennbaren Positionen. Es wurde nichts gespeichert.");
+  }
+  return payload;
 }
 async function buildOfflinePayloadFromFile(file: DocumentPicker.DocumentPickerAsset, type: SelectedType): Promise<ImportedPayload> {
   if (type === "json") {
@@ -400,15 +383,15 @@ async function buildOfflinePayloadFromFile(file: DocumentPicker.DocumentPickerAs
       encoding: FileSystem.EncodingType.UTF8
     });
     const parsed = JSON.parse(rawText);
-    return normalizeImportPayload(parsed);
+    return requireRealLvPositions(normalizeImportPayload(parsed));
   }
   if (type === "csv") {
     const rawText = await FileSystem.readAsStringAsync(file.uri, {
       encoding: FileSystem.EncodingType.UTF8
     });
-    return parseCsvToPayload(rawText, file.name || "Importiertes LV");
+    return requireRealLvPositions(parseCsvToPayload(rawText, file.name || "Importiertes LV"));
   }
-  if (type === "xml" || type === "gaeb" || type === "x83" || type === "x84") {
+  if (type === "xml") {
     try {
       const rawText = await FileSystem.readAsStringAsync(file.uri, {
         encoding: FileSystem.EncodingType.UTF8
@@ -417,7 +400,10 @@ async function buildOfflinePayloadFromFile(file: DocumentPicker.DocumentPickerAs
       if (parsed.items.length) return parsed;
     } catch {}
   }
-  return buildSyntheticPayloadForBinaryFile(type, file);
+  throw new Error(
+    `Der Dateityp ${type.toUpperCase()} kann offline nicht zuverlässig als LV gelesen werden. ` +
+    "Die Datei wurde nicht als Positions-LV importiert. Bitte Server-Import verwenden oder ein unterstütztes JSON/CSV/XML mit echten Positionen auswählen."
+  );
 }
 async function uploadImportFile(params: {
   projectCode: string;
@@ -429,6 +415,8 @@ async function uploadImportFile(params: {
     file,
     sourceType
   } = params;
+  const token = await getToken();
+  if (!token) throw new Error("Anmeldung erforderlich: Bitte erneut anmelden.");
   const base = await resolveApiBase();
   const url = `${base}/api/project-lv/${encodeURIComponent(projectCode)}/import-file`;
   const form = new FormData();
@@ -440,7 +428,8 @@ async function uploadImportFile(params: {
   const res = await fetch(url, {
     method: "POST",
     headers: {
-      Accept: "application/json"
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`
     },
     body: form
   });
@@ -464,8 +453,17 @@ export default function LvImportScreen({
   const projectMeta = useMemo(() => buildProjectRef(params), [params]);
   const projectCode = projectMeta.projectCode;
   const projectId = projectMeta.projectId;
-  const hasServerProjectCode = !!String(params?.projectCode || "").trim();
-  const offlineMode = !hasServerProjectCode;
+  const [appMode, setAppMode] = useState<"NUR_APP" | "SERVER_SYNC" | null>(null);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void AsyncStorage.getItem("rlc_mobile_mode").then(value => {
+      if (active) setAppMode(value === "NUR_APP" ? "NUR_APP" : "SERVER_SYNC");
+    }).catch(() => {
+      if (active) setAppMode(null);
+    });
+    return () => { active = false; };
+  }, []));
+  const offlineMode = appMode === "NUR_APP";
   const [file, setFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<ImportedPayload | null>(null);
@@ -501,6 +499,7 @@ export default function LvImportScreen({
     }
   }
   async function pickFile(): Promise<void> {
+    if (!appMode) { Alert.alert("LV Import", "Arbeitsmodus konnte nicht geladen werden."); return; }
     try {
       const res = await DocumentPicker.getDocumentAsync({
         type: ["application/json", "text/csv", "text/plain", "application/pdf", "application/xml", "text/xml", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "*/*"],
@@ -516,12 +515,14 @@ export default function LvImportScreen({
       }
       setFile(picked);
       setSourceType(detected);
-      const payload = await buildOfflinePayloadFromFile(picked, detected);
-      setPreview(payload);
       if (offlineMode) {
+        const payload = await buildOfflinePayloadFromFile(picked, detected);
+        setPreview(payload);
         Alert.alert("LV Import", `Datei erkannt: ${detected.toUpperCase()}.\n\nDie Datei kann lokal importiert werden.`);
-      } else if (detected === "xml" || detected === "gaeb" || detected === "x83" || detected === "x84") {
-        Alert.alert("LV Import", `Datei erkannt: ${detected.toUpperCase()}.\n\nServer-Import aktiv. Offline wurde zusätzlich eine Vorschau vorbereitet.`);
+      } else {
+        // Server-Import darf nicht am eingeschränkten Offline-Parser scheitern.
+        setPreview(null);
+        Alert.alert("LV Import", `Datei erkannt: ${detected.toUpperCase()}.\n\nDie Originaldatei wird vom Server geprüft und importiert.`);
       }
     } catch (e: any) {
       Alert.alert("LV Import", String(e?.message || "Datei konnte nicht gelesen werden"));
@@ -529,6 +530,7 @@ export default function LvImportScreen({
     }
   }
   async function upload(): Promise<void> {
+    if (!appMode) { Alert.alert("LV Import", "Arbeitsmodus konnte nicht geladen werden."); return; }
     if (!file || !sourceType) {
       Alert.alert("LV Import", "Bitte zuerst eine Datei auswählen.");
       return;
@@ -555,12 +557,12 @@ export default function LvImportScreen({
         }]);
         return;
       }
-      if (!String(params?.projectCode || "").trim()) {
+      if (!String(projectCode || "").trim() || projectCode === "local-project") {
         Alert.alert("LV Import", "Projektcode fehlt.");
         return;
       }
       const result = await uploadImportFile({
-        projectCode: String(params.projectCode).trim(),
+        projectCode: String(projectCode).trim(),
         file,
         sourceType
       });
@@ -629,12 +631,12 @@ export default function LvImportScreen({
         <View style={s.card}>
           <Text style={s.cardTitle}>Aktueller Stand</Text>
           {offlineMode ? <>
-              <Text style={s.cardText}>Ohne Server: lokaler Import für alle Dateitypen aktiv</Text>
-              <Text style={s.cardText}>JSON / CSV / XML / GAEB / X83 / X84: direkte Vorschau</Text>
-              <Text style={s.cardText}>XLS / XLSX / PDF: lokale Dateiübernahme mit LV-Platzhalter</Text>
+              <Text style={s.cardText}>Ohne Server: nur erkannte LV-Positionen importieren</Text>
+              <Text style={s.cardText}>JSON / CSV / unterstütztes XML: lokale Positions-Vorschau</Text>
+              <Text style={s.cardText}>XLS / XLSX / PDF / nicht erkanntes GAEB: Server-Import erforderlich</Text>
             </> : <>
               <Text style={s.cardText}>Server-Import aktiv</Text>
-              <Text style={s.cardText}>Offline-Vorschau zusätzlich vorbereitet</Text>
+              <Text style={s.cardText}>Originaldatei wird serverseitig geprüft</Text>
               <Text style={s.cardText}>Unterstützt: JSON, CSV, XML, GAEB, X83, X84, PDF, XLS, XLSX</Text>
             </>}
         </View>
@@ -644,7 +646,7 @@ export default function LvImportScreen({
             <Text style={s.cardText}>Name: {file.name || "—"}</Text>
             <Text style={s.cardText}>Typ: {sourceType?.toUpperCase() || "—"}</Text>
             <Text style={s.cardText}>
-              Verarbeitung: {offlineMode ? "Lokaler Cache" : "Server + lokale Vorschau"}
+              Verarbeitung: {offlineMode ? "Lokaler Cache" : "Server-Import"}
             </Text>
             <Text style={s.cardText}>
               Größe: {typeof file.size === "number" ? `${file.size} Bytes` : "—"}

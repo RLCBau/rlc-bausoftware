@@ -179,7 +179,8 @@ export default function ProjectPdfsScreen({
       const mapped: Row[] = [];
       for (const it of items) {
         const name = String(it?.name || "").trim();
-        const url = String(it?.url || "").trim();
+        // Older server records used the SPA route /projects/*; protected PDFs are served by /files/*.
+        const url = String(it?.url || "").trim().replace(/^\/projects\//, "/files/");
         if (!name || !url) continue;
         const abs = await api.absUrl(url);
         const local = await getLocalUri(projectFsKey, name);
@@ -193,7 +194,13 @@ export default function ProjectPdfsScreen({
           busy: false
         });
       }
-      setRows(mapped);
+      // Keep the newest server export of each PDF; older revisions stay archived.
+      const newest = new Map<string, Row>();
+      for (const pdf of mapped) {
+        const previous = newest.get(pdf.name);
+        if (!previous || String(pdf.mtime || "") > String(previous.mtime || "")) newest.set(pdf.name, pdf);
+      }
+      setRows(Array.from(newest.values()).sort((a, b) => String(b.mtime || "").localeCompare(String(a.mtime || ""))));
     } catch (e: any) {
       setLastError(e?.message || "PDF-Liste fehlgeschlagen.");
       await loadOffline();
@@ -221,11 +228,12 @@ export default function ProjectPdfsScreen({
         });
         return;
       }
-      const abs = r.absUrl || (await api.absUrl(r.url));
-      navigation.navigate("PdfViewer", {
-        uri: abs,
-        title: r.name
-      });
+      if (!r.url) throw new Error("PDF ist offline nicht verfügbar.");
+      // Protected /files routes require a bearer token; WebView cannot open them directly.
+      const abs = await api.absUrl(r.url);
+      const uri = await downloadPdf(projectFsKey, r.name, abs);
+      navigation.navigate("PdfViewer", { uri, title: r.name });
+      setRows(prev => prev.map(x => x.name === r.name ? { ...x, offline: true, absUrl: uri } : x));
     } catch (e: any) {
       Alert.alert("PDF", e?.message || "Öffnen fehlgeschlagen.");
     }
@@ -235,7 +243,11 @@ export default function ProjectPdfsScreen({
       Alert.alert("Download", "Offline-Modus: Bitte online gehen, um PDFs vom Server zu laden.");
       return;
     }
-    const abs = r.absUrl || (await api.absUrl(r.url));
+    if (!r.url) {
+      Alert.alert("Download", "Keine Server-URL verfügbar.");
+      return;
+    }
+    const abs = await api.absUrl(r.url);
     setRows(prev => prev.map(x => x.name === r.name ? {
       ...x,
       busy: true
@@ -400,7 +412,7 @@ export default function ProjectPdfsScreen({
                   <Text style={s.sub} numberOfLines={2}>
                     {r.folder ? `${r.folder}` : ""}
                     {r.folder && r.mtime ? " • " : ""}
-                    {r.mtime ? String(r.mtime) : ""}
+                    {r.mtime ? new Date(r.mtime).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : ""}
                   </Text>
                 </Pressable>
 

@@ -5,6 +5,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../navigation/types";
 import { COLORS, createRlcStyles } from "../ui/theme";
+import { api } from "../lib/api";
+import { getAppMode } from "../lib/appMode";
 type Props = NativeStackScreenProps<RootStackParamList, "MengenList">;
 const KEY = "rlc_mengen_list:";
 function money(v: number) {
@@ -14,7 +16,16 @@ function money(v: number) {
   });
 }
 function num(v: any) {
-  return Number(String(v ?? "").replace(",", ".") || 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v ?? "").trim().replace(/\s/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 function calcTotal(rows: any[]) {
   if (!Array.isArray(rows)) return 0;
@@ -57,7 +68,8 @@ function normalizeItem(input: any) {
     datum: String(input?.datum || input?.date || ""),
     rows: Array.isArray(input?.rows) ? input.rows : [],
     createdAt: input?.createdAt || "",
-    updatedAt: input?.updatedAt || ""
+    updatedAt: input?.updatedAt || "",
+    version: Number(input?.version || 0)
   };
 }
 export default function MengenListScreen({
@@ -80,8 +92,21 @@ export default function MengenListScreen({
   const load = useCallback(async () => {
     try {
       setBusy(true);
-      const raw = await AsyncStorage.getItem(KEY + projectCode);
-      const list = raw ? JSON.parse(raw) : [];
+      const mode = await getAppMode();
+      let list: any[] = [];
+      if (mode !== "NUR_APP") {
+        try {
+          // SERVER_SYNC: server/PostgreSQL is authoritative; AsyncStorage is cache only.
+          list = await api.getMengen(projectCode);
+          await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(list));
+        } catch {
+          const raw = await AsyncStorage.getItem(KEY + projectCode);
+          list = raw ? JSON.parse(raw) : [];
+        }
+      } else {
+        const raw = await AsyncStorage.getItem(KEY + projectCode);
+        list = raw ? JSON.parse(raw) : [];
+      }
       const safe = (Array.isArray(list) ? list : []).map(normalizeItem);
       safe.sort((a, b) => {
         const ta = parseTime(a.updatedAt || a.createdAt || a.datum);
@@ -107,6 +132,14 @@ export default function MengenListScreen({
       style: "destructive",
       onPress: async () => {
         try {
+          const mode = await getAppMode();
+          const current = items.find((x: any) => String(x?.id) === String(id));
+          if (mode !== "NUR_APP") {
+            if (!current || !Number.isInteger(Number(current.version)) || Number(current.version) < 1) {
+              throw new Error("Dokumentversion fehlt. Bitte neu laden.");
+            }
+            await api.deleteMengen(projectCode, id, Number(current.version));
+          }
           const raw = await AsyncStorage.getItem(KEY + projectCode);
           const list = raw ? JSON.parse(raw) : [];
           const next = Array.isArray(list) ? list.filter((x: any) => String(x?.id) !== String(id)) : [];

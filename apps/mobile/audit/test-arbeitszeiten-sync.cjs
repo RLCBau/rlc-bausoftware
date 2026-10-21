@@ -1,0 +1,22 @@
+const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),Module=require("node:module"),ts=require("typescript");
+const row={id:"workingtime-test",date:"2026-10-17",events:[{type:"START",timestamp:10000,gps:{latitude:47,longitude:12}},{type:"END",timestamp:20000,gps:{latitude:47,longitude:12}}],hours:1,workflowStatus:"EINGEREICHT"};
+const item={id:"qwork",kind:"ARBEITSZEIT",projectId:"BA-2026-TEST",status:"PENDING",tries:0,payload:{row}};
+let mode="success";let calls=0;let lastBody=null;
+const queue={queueList:async()=>[{...item}],queueUpdate:async(_,patch)=>Object.assign(item,patch)};
+const api={api:{projects:async()=>[],getApiUrl:async()=>"https://test.invalid"}};
+global.fetch=async(url,opts)=>{calls++;lastBody=JSON.parse(opts.body);
+ if(mode==="offline")throw new Error("Network request failed");
+ return {ok:true,status:200,text:async()=>JSON.stringify(mode==="reject"?{ok:false}:{ok:true,id:row.id})};
+};
+const source=path.resolve(__dirname,"../src/lib/sync.ts");
+const js=ts.transpileModule(fs.readFileSync(source,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const mod=new Module(source,module);mod.filename=source;mod.paths=Module._nodeModulePaths(path.dirname(source));
+mod.require=n=>n==="./api"?api:n==="./offlineQueue"?queue:n==="./auth"?{getServerToken:async()=>"test"}:require(n);mod._compile(js,source);
+(async()=>{
+ let r=await mod.exports.syncAll({projectCode:"BA-2026-TEST"});assert.deepEqual(r,{ok:1,fail:0});assert.equal(item.status,"DONE");assert.equal(lastBody.events.length,2);
+ mode="reject";item.status="PENDING";item.nextTryAt=null;item.tries=0;
+ r=await mod.exports.syncAll({projectCode:"BA-2026-TEST"});assert.deepEqual(r,{ok:0,fail:1});assert.equal(item.status,"ERROR");
+ mode="offline";item.status="PENDING";item.nextTryAt=null;item.tries=0;
+ r=await mod.exports.syncAll({projectCode:"BA-2026-TEST"});assert.deepEqual(r,{ok:0,fail:1});assert.equal(item.status,"PENDING");
+ assert.equal(calls,3);console.log("PASS Arbeitszeiten queue: positive ACK, rejected ACK, offline retry");
+})().catch(e=>{console.error(e);process.exitCode=1;});

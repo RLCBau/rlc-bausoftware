@@ -1,0 +1,26 @@
+const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),Module=require("node:module"),ts=require("typescript");
+let response={ok:true,id:"invoice_1"},calls=[],failure=false;
+const p=path.resolve(__dirname,"../src/lib/fiscalInvoice.ts");
+const code=ts.transpileModule(fs.readFileSync(p,"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const mod=new Module(p,module);mod.filename=p;mod.paths=Module._nodeModulePaths(path.dirname(p));
+mod.require=name=>name==="./api"?{request:async(url,init)=>{calls.push({url,init});if(failure && url.endsWith("/issue"))throw Error("OFFLINE");return response;}}:require(name);
+mod._compile(code,p);
+(async()=>{
+await mod.exports.saveInvoiceDraftOnServer("BA-2026-001",{id:"invoice_1",rechnungNr:"RE-001",fiscalStatus:"AUSGESTELLT"});
+assert.equal(JSON.parse(calls[0].init.body).fiscalStatus,"ENTWURF");
+response={ok:true,id:"wrong"};
+await assert.rejects(()=>mod.exports.saveInvoiceDraftOnServer("BA-2026-001",{id:"invoice_1",rechnungNr:"RE-001"}),/NOT_CONFIRMED/);
+response={ok:true,invoice:{fiscalStatus:"AUSGESTELLT"}};
+let r=await mod.exports.issueInvoiceOnServer("BA-2026-001","invoice_1");
+assert.equal(r.issued,true);assert.equal(r.reconciliationRequired,false);
+response={ok:false,fiscalStatus:"AUSGESTELLT",error:"ACCOUNTING_RECONCILIATION_REQUIRED"};
+r=await mod.exports.issueInvoiceOnServer("BA-2026-001","invoice_1");
+assert.equal(r.reconciliationRequired,true);
+failure=true;response=[{id:"invoice_1",fiscalStatus:"AUSGESTELLT"}];calls=[];
+r=await mod.exports.issueInvoiceOnServer("BA-2026-001","invoice_1");
+assert.equal(r.verifiedAfterError,true);assert.equal(calls.length,2);
+response=[{id:"invoice_1",fiscalStatus:"ENTWURF"}];calls=[];
+await assert.rejects(()=>mod.exports.issueInvoiceOnServer("BA-2026-001","invoice_1"),/STATUS_UNCERTAIN/);
+assert.equal(calls.length,2,"Never retry POST issue automatically");
+console.log("PASS fiscal bridge: draft, normal/202 issue, lost response reconciliation, no duplicate POST");
+})().catch(e=>{console.error(e);process.exitCode=1;});

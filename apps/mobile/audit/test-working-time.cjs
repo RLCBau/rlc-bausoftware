@@ -1,0 +1,11 @@
+const assert=require("node:assert/strict"),fs=require("node:fs"),path=require("node:path"),ts=require("typescript");
+const source=fs.readFileSync(path.join(__dirname,"../src/screens/ArbeitszeitenScreen.tsx"),"utf8");
+const selected=source.match(/function calculateBreakMinutes\(events: TimeEvent\[\]\)[\s\S]*?\n}\n\nfunction calculateHours\(events: TimeEvent\[\]\)[\s\S]*?\n}/);
+assert(selected,"time calculation functions missing");
+const js=ts.transpileModule(selected[0].replaceAll("function ","function "),{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;
+const calc=new Function(js+";return {calculateHours,calculateBreakMinutes};")();
+const h=3600000,m=60000, ev=(type,timestamp)=>({type,timestamp});
+assert.equal(calc.calculateHours([ev("START",h),ev("PAUSE_START",2*h),ev("PAUSE_END",2*h+30*m),ev("END",3*h)]),1.5);
+assert.equal(calc.calculateHours([ev("PAUSE_START",0),ev("PAUSE_END",30*m),ev("START",h),ev("END",3*h)]),2);
+assert.equal(calc.calculateHours([ev("START",23*h),ev("PAUSE_START",23*h+30*m),ev("PAUSE_END",24*h),ev("END",25*h)]),1.5);
+console.log("PASS working time: pause, out-of-shift events, overnight shift");

@@ -1,0 +1,1177 @@
+{
+  "summary": {
+    "generated": "2026-10-17T13:13:49.627950",
+    "files_scanned": 85,
+    "lines_scanned": 53503,
+    "routes_declared": 40,
+    "routes_used": 35,
+    "undeclared_routes": [],
+    "api_members_used": 59,
+    "api_members_unresolved": [
+      "rlcbausoftware"
+    ],
+    "direct_fetch_files": [
+      [
+        "src/lib/auth.ts",
+        2
+      ],
+      [
+        "src/lib/companyCache.ts",
+        1
+      ],
+      [
+        "src/lib/exporters/projectExport.ts",
+        1
+      ],
+      [
+        "src/lib/mobilePdfCore.ts",
+        1
+      ],
+      [
+        "src/lib/serverProfile.ts",
+        1
+      ],
+      [
+        "src/lib/sync.ts",
+        1
+      ],
+      [
+        "src/screens/EingangPruefungScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/KalkulationOutlierScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/KalkulationScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/KiCalculationScreen.tsx",
+        2
+      ],
+      [
+        "src/screens/LoginScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/LvImportScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/RegieScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/RlcCopilotScreen.tsx",
+        2
+      ]
+    ],
+    "http_literals": [
+      [
+        "src/lib/auth.ts",
+        "http://localhost:4000"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/package/2006/content-types"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/package/2006/relationships"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/package/2006/relationships"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+      ],
+      [
+        "src/lib/offerWorkbook.ts",
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"
+      ]
+    ],
+    "asyncstorage_sensitive_refs": [
+      [
+        "src/lib/auth.ts",
+        "AsyncStorage.setItem(AUTH_MODE_KEY, normalizeMode(mode));"
+      ],
+      [
+        "src/lib/auth.ts",
+        "AsyncStorage.getItem(AUTH_MODE_KEY);"
+      ],
+      [
+        "src/lib/auth.ts",
+        "AsyncStorage.getItem(TOKEN_KEY));"
+      ],
+      [
+        "src/lib/auth.ts",
+        "AsyncStorage.getItem(SERVER_TOKEN_KEY)"
+      ],
+      [
+        "src/lib/companyBundle.ts",
+        "AsyncStorage.setItem(FALLBACK_SECRET_KEY, gen);"
+      ]
+    ],
+    "console_log_files": [
+      [
+        "src/lib/api.ts",
+        1
+      ],
+      [
+        "src/lib/auth.ts",
+        1
+      ],
+      [
+        "src/lib/exporters/blueDocumentPdfBuilder.ts",
+        1
+      ],
+      [
+        "src/lib/exporters/documentPdfBuilder.ts",
+        1
+      ],
+      [
+        "src/lib/exporters/schlussrechnungPdfBuilder.ts",
+        1
+      ],
+      [
+        "src/lib/rlcKiModuleBridge.ts",
+        1
+      ],
+      [
+        "src/screens/AbschlagEditorScreen.tsx",
+        4
+      ],
+      [
+        "src/screens/AngebotEditorScreen.tsx",
+        2
+      ],
+      [
+        "src/screens/AngebotListScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/BautagebuchScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/EingangPruefungScreen.tsx",
+        2
+      ],
+      [
+        "src/screens/LieferscheinScreen.tsx",
+        3
+      ],
+      [
+        "src/screens/MengenEditorScreen.tsx",
+        6
+      ],
+      [
+        "src/screens/PdfViewerScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/PhotosNotesScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/ProjectHomeScreen.tsx",
+        2
+      ],
+      [
+        "src/screens/RegieScreen.tsx",
+        2
+      ],
+      [
+        "src/screens/SchlussrechnungScreen.tsx",
+        3
+      ]
+    ],
+    "todo_files": [
+      [
+        "src/lib/api.ts",
+        1
+      ],
+      [
+        "src/lib/exporters/documentPdfBuilder.ts",
+        1
+      ],
+      [
+        "src/lib/exporters/projectExport.ts",
+        5
+      ],
+      [
+        "src/screens/EingangPruefungScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/InboxScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/PhotosNotesScreen.tsx",
+        2
+      ],
+      [
+        "src/screens/ProjectHomeScreen.tsx",
+        2
+      ],
+      [
+        "src/screens/ProjectsScreen.tsx",
+        1
+      ],
+      [
+        "src/screens/RlcCopilotScreen.tsx",
+        1
+      ]
+    ],
+    "device_api_files": [
+      [
+        "src/lib/api.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/auth.ts",
+        [
+          "SecureStore"
+        ]
+      ],
+      [
+        "src/lib/companyBundle.ts",
+        [
+          "FileSystem",
+          "SecureStore"
+        ]
+      ],
+      [
+        "src/lib/companyCache.ts",
+        [
+          "ImagePicker",
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/exportStorage.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/exporters/bautagebuchPdfBuilder.ts",
+        [
+          "FileSystem",
+          "Sharing",
+          "Print"
+        ]
+      ],
+      [
+        "src/lib/exporters/blueDocumentPdfBuilder.ts",
+        [
+          "FileSystem",
+          "Print"
+        ]
+      ],
+      [
+        "src/lib/exporters/documentPdfBuilder.ts",
+        [
+          "FileSystem",
+          "Sharing",
+          "Print"
+        ]
+      ],
+      [
+        "src/lib/exporters/offlineExport.ts",
+        [
+          "Print"
+        ]
+      ],
+      [
+        "src/lib/exporters/pdfBranding.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/exporters/projectExport.ts",
+        [
+          "FileSystem",
+          "MailComposer",
+          "Print"
+        ]
+      ],
+      [
+        "src/lib/exporters/schlussrechnungPdfBuilder.ts",
+        [
+          "FileSystem",
+          "Sharing",
+          "Print"
+        ]
+      ],
+      [
+        "src/lib/fsDirs.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/hydratePreview.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/localAuth.ts",
+        [
+          "SecureStore"
+        ]
+      ],
+      [
+        "src/lib/mailComposer.ts",
+        [
+          "MailComposer"
+        ]
+      ],
+      [
+        "src/lib/mediaStore.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/mobilePdfCore.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/openPdf.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/pdfStorage.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/lib/storage.ts",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/AngebotEditorScreen.tsx",
+        [
+          "FileSystem",
+          "Sharing"
+        ]
+      ],
+      [
+        "src/screens/AngebotListScreen.tsx",
+        [
+          "FileSystem",
+          "Sharing"
+        ]
+      ],
+      [
+        "src/screens/ArbeitszeitenScreen.tsx",
+        [
+          "Location"
+        ]
+      ],
+      [
+        "src/screens/BautagebuchScreen.tsx",
+        [
+          "FileSystem",
+          "Sharing"
+        ]
+      ],
+      [
+        "src/screens/CompanyAdminScreen.tsx",
+        [
+          "ImagePicker"
+        ]
+      ],
+      [
+        "src/screens/CompanyImportScreen.tsx",
+        [
+          "Camera",
+          "DocumentPicker"
+        ]
+      ],
+      [
+        "src/screens/CompanyOfflineSetupScreen.tsx",
+        [
+          "ImagePicker"
+        ]
+      ],
+      [
+        "src/screens/EingangPruefungScreen.tsx",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/LieferscheinScreen.tsx",
+        [
+          "Camera",
+          "ImagePicker",
+          "DocumentPicker",
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/LoginScreen.tsx",
+        [
+          "ImagePicker",
+          "SecureStore"
+        ]
+      ],
+      [
+        "src/screens/LvImportScreen.tsx",
+        [
+          "DocumentPicker",
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/LvReadOnlyScreen.tsx",
+        [
+          "Sharing"
+        ]
+      ],
+      [
+        "src/screens/PdfViewerScreen.tsx",
+        [
+          "FileSystem",
+          "MailComposer",
+          "Sharing",
+          "Print"
+        ]
+      ],
+      [
+        "src/screens/PhotosNotesScreen.tsx",
+        [
+          "Camera",
+          "ImagePicker",
+          "DocumentPicker",
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/ProjectHomeScreen.tsx",
+        [
+          "DocumentPicker"
+        ]
+      ],
+      [
+        "src/screens/ProjectPdfsScreen.tsx",
+        [
+          "DocumentPicker",
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/RechtlichesScreen.tsx",
+        [
+          "WebBrowser"
+        ]
+      ],
+      [
+        "src/screens/RegieScreen.tsx",
+        [
+          "Camera",
+          "ImagePicker",
+          "DocumentPicker",
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/RlcCopilotScreen.tsx",
+        [
+          "FileSystem"
+        ]
+      ],
+      [
+        "src/screens/ServerSetupScreen.tsx",
+        [
+          "Camera"
+        ]
+      ]
+    ]
+  },
+  "files": [
+    {
+      "file": "src/components/DocActionBar.tsx",
+      "lines": 96,
+      "sha16": "d044b1f4f6fbe7ca",
+      "flags": []
+    },
+    {
+      "file": "src/components/RlcCategoryGrid.tsx",
+      "lines": 167,
+      "sha16": "977c7ed0d1b98000",
+      "flags": []
+    },
+    {
+      "file": "src/components/RlcKiFloatingButton.tsx",
+      "lines": 385,
+      "sha16": "ab11a6a3faf291ed",
+      "flags": []
+    },
+    {
+      "file": "src/lib/api.ts",
+      "lines": 3422,
+      "sha16": "4930e443e9ab35f8",
+      "flags": [
+        "API_UNRESOLVED:rlcbausoftware",
+        "CONSOLE:1",
+        "TODO:1",
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/appMode.ts",
+      "lines": 27,
+      "sha16": "43b1733c1c48b9df",
+      "flags": []
+    },
+    {
+      "file": "src/lib/auth.ts",
+      "lines": 405,
+      "sha16": "a0e92a5c7f3537ad",
+      "flags": [
+        "DIRECT_FETCH:2",
+        "HTTP_LITERAL",
+        "CONSOLE:1",
+        "DEVICE_API:SecureStore"
+      ]
+    },
+    {
+      "file": "src/lib/autoSync.ts",
+      "lines": 21,
+      "sha16": "48dfc3963d090e95",
+      "flags": []
+    },
+    {
+      "file": "src/lib/companyBundle.ts",
+      "lines": 289,
+      "sha16": "f63abd5f96b1a308",
+      "flags": [
+        "DEVICE_API:FileSystem,SecureStore"
+      ]
+    },
+    {
+      "file": "src/lib/companyCache.ts",
+      "lines": 289,
+      "sha16": "86423930401671a6",
+      "flags": [
+        "DIRECT_FETCH:1",
+        "DEVICE_API:ImagePicker,FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/docSubmit.ts",
+      "lines": 150,
+      "sha16": "e5c9060de0a4a125",
+      "flags": []
+    },
+    {
+      "file": "src/lib/exportStorage.ts",
+      "lines": 160,
+      "sha16": "9c32baa7a078f3ff",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/exporters/bautagebuchPdfBuilder.ts",
+      "lines": 587,
+      "sha16": "3caf1495f5f93c0d",
+      "flags": [
+        "DEVICE_API:FileSystem,Sharing,Print"
+      ]
+    },
+    {
+      "file": "src/lib/exporters/blueDocumentPdfBuilder.ts",
+      "lines": 103,
+      "sha16": "92084c778df78555",
+      "flags": [
+        "CONSOLE:1",
+        "DEVICE_API:FileSystem,Print"
+      ]
+    },
+    {
+      "file": "src/lib/exporters/documentPdfBuilder.ts",
+      "lines": 836,
+      "sha16": "f98f983dff6a281c",
+      "flags": [
+        "CONSOLE:1",
+        "TODO:1",
+        "DEVICE_API:FileSystem,Sharing,Print"
+      ]
+    },
+    {
+      "file": "src/lib/exporters/offlineExport.ts",
+      "lines": 144,
+      "sha16": "3790a1011a10b417",
+      "flags": [
+        "DEVICE_API:Print"
+      ]
+    },
+    {
+      "file": "src/lib/exporters/pdfBranding.ts",
+      "lines": 177,
+      "sha16": "443b354c330fe3ec",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/exporters/projectExport.ts",
+      "lines": 3893,
+      "sha16": "b2a714484e6d29f0",
+      "flags": [
+        "DIRECT_FETCH:1",
+        "TODO:5",
+        "DEVICE_API:FileSystem,MailComposer,Print"
+      ]
+    },
+    {
+      "file": "src/lib/exporters/regiePdf.ts",
+      "lines": 151,
+      "sha16": "a6c0548fa91b22eb",
+      "flags": []
+    },
+    {
+      "file": "src/lib/exporters/schlussrechnungPdfBuilder.ts",
+      "lines": 468,
+      "sha16": "0be70dc35358eb1d",
+      "flags": [
+        "CONSOLE:1",
+        "DEVICE_API:FileSystem,Sharing,Print"
+      ]
+    },
+    {
+      "file": "src/lib/fiscalInvoice.ts",
+      "lines": 58,
+      "sha16": "8af487d79e87ed2a",
+      "flags": []
+    },
+    {
+      "file": "src/lib/fsDirs.ts",
+      "lines": 34,
+      "sha16": "dfcde70c756e496e",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/hydratePreview.ts",
+      "lines": 295,
+      "sha16": "c95fb0fb782b0053",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/localAuth.ts",
+      "lines": 104,
+      "sha16": "e9be73ba29eb5181",
+      "flags": [
+        "DEVICE_API:SecureStore"
+      ]
+    },
+    {
+      "file": "src/lib/mailComposer.ts",
+      "lines": 23,
+      "sha16": "8a6a9e4e42b7793a",
+      "flags": [
+        "DEVICE_API:MailComposer"
+      ]
+    },
+    {
+      "file": "src/lib/mediaStore.ts",
+      "lines": 88,
+      "sha16": "b1e5d80535241d34",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/mobilePdfCore.ts",
+      "lines": 274,
+      "sha16": "f99eac96d55085bf",
+      "flags": [
+        "DIRECT_FETCH:1",
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/offerWorkbook.ts",
+      "lines": 62,
+      "sha16": "99b90b1535b21a4c",
+      "flags": [
+        "HTTP_LITERAL"
+      ]
+    },
+    {
+      "file": "src/lib/offlineQueue.ts",
+      "lines": 702,
+      "sha16": "3e70a349446e5f32",
+      "flags": []
+    },
+    {
+      "file": "src/lib/openPdf.ts",
+      "lines": 81,
+      "sha16": "76d2e2e8b6c963a6",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/pdfStorage.ts",
+      "lines": 367,
+      "sha16": "4cb7b39ddc64db5f",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/queueExecutor.ts",
+      "lines": 30,
+      "sha16": "c81be488a8f82e3f",
+      "flags": []
+    },
+    {
+      "file": "src/lib/rlcKiFieldParser.ts",
+      "lines": 311,
+      "sha16": "2f9934111ff69f5c",
+      "flags": []
+    },
+    {
+      "file": "src/lib/rlcKiModuleBridge.ts",
+      "lines": 139,
+      "sha16": "ed153b5d8ee200bd",
+      "flags": [
+        "CONSOLE:1"
+      ]
+    },
+    {
+      "file": "src/lib/rlcKiSmartParser.ts",
+      "lines": 458,
+      "sha16": "cf6923a77adb5f07",
+      "flags": []
+    },
+    {
+      "file": "src/lib/serverProfile.ts",
+      "lines": 190,
+      "sha16": "95fff248a4e2498b",
+      "flags": [
+        "DIRECT_FETCH:1"
+      ]
+    },
+    {
+      "file": "src/lib/storage.ts",
+      "lines": 302,
+      "sha16": "0965f12e1b3a1fcd",
+      "flags": [
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/lib/submitToEingangPruefung.ts",
+      "lines": 148,
+      "sha16": "3eb6e25dabde78da",
+      "flags": []
+    },
+    {
+      "file": "src/lib/submitUnified.ts",
+      "lines": 49,
+      "sha16": "eee42b6d63022d34",
+      "flags": []
+    },
+    {
+      "file": "src/lib/sync.ts",
+      "lines": 460,
+      "sha16": "767e57e2630cf5a9",
+      "flags": [
+        "DIRECT_FETCH:1"
+      ]
+    },
+    {
+      "file": "src/navigation/types.ts",
+      "lines": 279,
+      "sha16": "01395ea0a3fd6ccb",
+      "flags": []
+    },
+    {
+      "file": "src/screens/AbschlagEditorScreen.tsx",
+      "lines": 653,
+      "sha16": "381b4fbbaba129c3",
+      "flags": [
+        "CONSOLE:4"
+      ]
+    },
+    {
+      "file": "src/screens/AbschlagListScreen.tsx",
+      "lines": 274,
+      "sha16": "89b2272aad13a110",
+      "flags": []
+    },
+    {
+      "file": "src/screens/AngebotEditorScreen.tsx",
+      "lines": 1428,
+      "sha16": "54ce0f20c79f07ae",
+      "flags": [
+        "CONSOLE:2",
+        "DEVICE_API:FileSystem,Sharing"
+      ]
+    },
+    {
+      "file": "src/screens/AngebotListScreen.tsx",
+      "lines": 986,
+      "sha16": "b8cf64a84e2402c7",
+      "flags": [
+        "CONSOLE:1",
+        "DEVICE_API:FileSystem,Sharing"
+      ]
+    },
+    {
+      "file": "src/screens/AnmeldenScreen.tsx",
+      "lines": 182,
+      "sha16": "71a7ff03cfb33664",
+      "flags": []
+    },
+    {
+      "file": "src/screens/ArbeitsmodusScreen.tsx",
+      "lines": 299,
+      "sha16": "11b91488b8faab57",
+      "flags": []
+    },
+    {
+      "file": "src/screens/ArbeitszeitenScreen.tsx",
+      "lines": 712,
+      "sha16": "00f9e2c0998cb7c3",
+      "flags": [
+        "DEVICE_API:Location"
+      ]
+    },
+    {
+      "file": "src/screens/BautagebuchScreen.tsx",
+      "lines": 637,
+      "sha16": "d7d20ef604564c2f",
+      "flags": [
+        "CONSOLE:1",
+        "DEVICE_API:FileSystem,Sharing"
+      ]
+    },
+    {
+      "file": "src/screens/CompanyAdminScreen.tsx",
+      "lines": 287,
+      "sha16": "dde78ff7e03d71ec",
+      "flags": [
+        "DEVICE_API:ImagePicker"
+      ]
+    },
+    {
+      "file": "src/screens/CompanyImportScreen.tsx",
+      "lines": 395,
+      "sha16": "11671478b4bce31b",
+      "flags": [
+        "DEVICE_API:Camera,DocumentPicker"
+      ]
+    },
+    {
+      "file": "src/screens/CompanyOfflineSetupScreen.tsx",
+      "lines": 372,
+      "sha16": "711483a2849a0983",
+      "flags": [
+        "DEVICE_API:ImagePicker"
+      ]
+    },
+    {
+      "file": "src/screens/EingangPruefungScreen.tsx",
+      "lines": 3350,
+      "sha16": "c1152a89104ec3b0",
+      "flags": [
+        "DIRECT_FETCH:1",
+        "CONSOLE:2",
+        "TODO:1",
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/screens/HomeScreen.tsx",
+      "lines": 48,
+      "sha16": "dba56a3370e03780",
+      "flags": []
+    },
+    {
+      "file": "src/screens/InboxScreen.tsx",
+      "lines": 1638,
+      "sha16": "22d60e4f5c321a69",
+      "flags": [
+        "TODO:1"
+      ]
+    },
+    {
+      "file": "src/screens/KalkulationOutlierScreen.tsx",
+      "lines": 357,
+      "sha16": "4432e6f7c5c6f163",
+      "flags": [
+        "DIRECT_FETCH:1"
+      ]
+    },
+    {
+      "file": "src/screens/KalkulationScreen.tsx",
+      "lines": 701,
+      "sha16": "5bd5e013b2276512",
+      "flags": [
+        "DIRECT_FETCH:1"
+      ]
+    },
+    {
+      "file": "src/screens/KiCalculationScreen.tsx",
+      "lines": 501,
+      "sha16": "6dc581f58339768f",
+      "flags": [
+        "DIRECT_FETCH:2"
+      ]
+    },
+    {
+      "file": "src/screens/LieferscheinScreen.tsx",
+      "lines": 2014,
+      "sha16": "a37c2bf13d19569a",
+      "flags": [
+        "CONSOLE:3",
+        "DEVICE_API:Camera,ImagePicker,DocumentPicker,FileSystem"
+      ]
+    },
+    {
+      "file": "src/screens/LoginScreen.tsx",
+      "lines": 1966,
+      "sha16": "f448cda3561172f3",
+      "flags": [
+        "DIRECT_FETCH:1",
+        "DEVICE_API:ImagePicker,SecureStore"
+      ]
+    },
+    {
+      "file": "src/screens/LvImportScreen.tsx",
+      "lines": 883,
+      "sha16": "aad212b6fccf77e2",
+      "flags": [
+        "DIRECT_FETCH:1",
+        "DEVICE_API:DocumentPicker,FileSystem"
+      ]
+    },
+    {
+      "file": "src/screens/LvReadOnlyScreen.tsx",
+      "lines": 1079,
+      "sha16": "d91d377eae733371",
+      "flags": [
+        "DEVICE_API:Sharing"
+      ]
+    },
+    {
+      "file": "src/screens/MengenEditorScreen.tsx",
+      "lines": 882,
+      "sha16": "f232c505f783a459",
+      "flags": [
+        "CONSOLE:6"
+      ]
+    },
+    {
+      "file": "src/screens/MengenListScreen.tsx",
+      "lines": 606,
+      "sha16": "b4baef6b42db101a",
+      "flags": []
+    },
+    {
+      "file": "src/screens/PdfViewerScreen.tsx",
+      "lines": 601,
+      "sha16": "a68732be32f5e149",
+      "flags": [
+        "CONSOLE:1",
+        "DEVICE_API:FileSystem,MailComposer,Sharing,Print"
+      ]
+    },
+    {
+      "file": "src/screens/PhotosNotesScreen.tsx",
+      "lines": 1748,
+      "sha16": "fd9a9c12b07495a8",
+      "flags": [
+        "CONSOLE:1",
+        "TODO:2",
+        "DEVICE_API:Camera,ImagePicker,DocumentPicker,FileSystem"
+      ]
+    },
+    {
+      "file": "src/screens/ProjectHomeScreen.tsx",
+      "lines": 1757,
+      "sha16": "9da0c3d096acf1c6",
+      "flags": [
+        "CONSOLE:2",
+        "TODO:2",
+        "DEVICE_API:DocumentPicker"
+      ]
+    },
+    {
+      "file": "src/screens/ProjectPdfsScreen.tsx",
+      "lines": 737,
+      "sha16": "4c3dbc7a4620d279",
+      "flags": [
+        "DEVICE_API:DocumentPicker,FileSystem"
+      ]
+    },
+    {
+      "file": "src/screens/ProjectsScreen.tsx",
+      "lines": 1106,
+      "sha16": "62aaf18f8653890b",
+      "flags": [
+        "TODO:1"
+      ]
+    },
+    {
+      "file": "src/screens/RechnungEditorScreen.tsx",
+      "lines": 1981,
+      "sha16": "f17a3d9430d34bd8",
+      "flags": []
+    },
+    {
+      "file": "src/screens/RechnungListScreen.tsx",
+      "lines": 581,
+      "sha16": "d84d069efaf9e3ef",
+      "flags": []
+    },
+    {
+      "file": "src/screens/RechtlichesScreen.tsx",
+      "lines": 157,
+      "sha16": "303844d7b9f9951f",
+      "flags": [
+        "DEVICE_API:WebBrowser"
+      ]
+    },
+    {
+      "file": "src/screens/RegieScreen.tsx",
+      "lines": 2218,
+      "sha16": "4333b41119909463",
+      "flags": [
+        "DIRECT_FETCH:1",
+        "CONSOLE:2",
+        "DEVICE_API:Camera,ImagePicker,DocumentPicker,FileSystem"
+      ]
+    },
+    {
+      "file": "src/screens/RlcCopilotScreen.tsx",
+      "lines": 727,
+      "sha16": "97d02c7547591c9c",
+      "flags": [
+        "DIRECT_FETCH:2",
+        "TODO:1",
+        "DEVICE_API:FileSystem"
+      ]
+    },
+    {
+      "file": "src/screens/SchlussrechnungScreen.tsx",
+      "lines": 419,
+      "sha16": "34ce9f16754f7d6e",
+      "flags": [
+        "CONSOLE:3"
+      ]
+    },
+    {
+      "file": "src/screens/ServerSetupScreen.tsx",
+      "lines": 348,
+      "sha16": "addf5a221869e476",
+      "flags": [
+        "API_UNRESOLVED:rlcbausoftware",
+        "DEVICE_API:Camera"
+      ]
+    },
+    {
+      "file": "src/screens/StartScreen.tsx",
+      "lines": 451,
+      "sha16": "f820e99a285833ce",
+      "flags": []
+    },
+    {
+      "file": "src/screens/SupportChatScreen.tsx",
+      "lines": 517,
+      "sha16": "244aed399e641048",
+      "flags": []
+    },
+    {
+      "file": "src/screens/TagesberichtEditorScreen.tsx",
+      "lines": 1005,
+      "sha16": "ecbb24333646d695",
+      "flags": []
+    },
+    {
+      "file": "src/screens/TagesberichtListScreen.tsx",
+      "lines": 724,
+      "sha16": "8bad673d38ebc814",
+      "flags": []
+    },
+    {
+      "file": "src/screens/TeamRolesScreen.tsx",
+      "lines": 721,
+      "sha16": "c171981a521da016",
+      "flags": []
+    },
+    {
+      "file": "src/storage/projectMeta.ts",
+      "lines": 189,
+      "sha16": "7c93275c5aa44235",
+      "flags": []
+    },
+    {
+      "file": "src/storage/session.ts",
+      "lines": 38,
+      "sha16": "7147559596f67fb6",
+      "flags": []
+    },
+    {
+      "file": "src/ui/RlcUi.tsx",
+      "lines": 189,
+      "sha16": "c7ce921ab93a0790",
+      "flags": []
+    },
+    {
+      "file": "src/ui/inlineStyles.ts",
+      "lines": 337,
+      "sha16": "c5a78738afaa6acb",
+      "flags": []
+    },
+    {
+      "file": "src/ui/theme.ts",
+      "lines": 478,
+      "sha16": "ac25da0a7ee8cc59",
+      "flags": []
+    }
+  ]
+}

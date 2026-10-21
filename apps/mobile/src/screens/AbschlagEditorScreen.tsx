@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, SafeAreaView, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -8,11 +8,24 @@ import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 type Props = NativeStackScreenProps<RootStackParamList, "AbschlagEditor">;
 const RECHNUNG_KEY = "rlc_rechnung_list:";
+function localDocumentDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 function num(v: string | number | null | undefined) {
-  return Number(String(v ?? "").replace(",", ".") || 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v ?? "").trim().replace(/\s/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 function money(v: number) {
   return Number(v || 0).toLocaleString("de-DE", {
@@ -32,14 +45,14 @@ function calcRechnungBrutto(doc: any) {
     return Number(doc.brutto);
   }
   const netto = calcRechnungNetto(doc?.rows || []);
-  const mwstPct = num(doc?.mwstPct || "19");
+  const mwstPct = num(doc?.mwstPct ?? "19");
   return netto + netto * mwstPct / 100;
 }
 function normalizeAbschlag(input: any, idx: number) {
   return {
     id: String(input?.id || makeId()),
     nummer: Number(input?.nummer || idx + 1),
-    datum: String(input?.datum || new Date().toISOString().slice(0, 10)),
+    datum: String(input?.datum || localDocumentDate()),
     betrag: Number(input?.betrag || 0),
     prozent: input?.prozent === null || input?.prozent === undefined ? undefined : Number(input.prozent || 0),
     note: String(input?.note || ""),
@@ -59,7 +72,7 @@ function normalizeRechnung(input: any) {
     rows: Array.isArray(input?.rows) ? input.rows : [],
     abschlaege: Array.isArray(input?.abschlaege) ? input.abschlaege.map((a: any, i: number) => normalizeAbschlag(a, i)) : [],
     brutto: typeof input?.brutto === "number" ? Number(input.brutto) : undefined,
-    mwstPct: String(input?.mwstPct || "19")
+    mwstPct: String(input?.mwstPct ?? "19")
   };
 }
 function rechnungStorageKeys(projectCode?: string, projectId?: string) {
@@ -100,7 +113,7 @@ export default function AbschlagEditorScreen({
     id: makeId(),
     rechnungId: rechnungId || "",
     abschlagNr: abschlagNr ? String(abschlagNr) : "",
-    datum: new Date().toISOString().slice(0, 10),
+    datum: localDocumentDate(),
     percent: "",
     betrag: "",
     note: ""
@@ -210,7 +223,7 @@ export default function AbschlagEditorScreen({
       }
       const betragNum = num(doc.betrag);
       const pctNum = num(doc.percent);
-      if (!betragNum || betragNum <= 0) {
+      if (!Number.isFinite(betragNum) || betragNum <= 0 || !Number.isFinite(pctNum) || pctNum < 0) {
         Alert.alert("Fehler", "Bitte einen gültigen Abschlagsbetrag eingeben.");
         return;
       }
@@ -252,8 +265,9 @@ export default function AbschlagEditorScreen({
       await AsyncStorage.setItem(loaded.key, JSON.stringify(rechnungen));
       await submitToEingangPruefung({
         type: "ABSCHLAGSRECHNUNG",
-        projectKey: projectCode,
-        projectCode,
+        projectKey: String(projectCode || projectId || "").trim(),
+        projectId,
+        projectCode: String(projectCode || projectId || "").trim(),
         title: `Abschlagsrechnung ${normalizedAbschlag.nummer}`,
         doc: {
           ...normalizedAbschlag,
@@ -269,9 +283,9 @@ export default function AbschlagEditorScreen({
         sourceScreen: "AbschlagEditor"
       });
       navigation.goBack();
-    } catch (e) {
+    } catch (e: any) {
       console.log("SAVE ABSCHLAG ERROR", e);
-      Alert.alert("Fehler", "Abschlagsrechnung konnte nicht gespeichert werden.");
+      Alert.alert("Übertragung fehlgeschlagen", String(e?.message || e || "Abschlagsrechnung konnte nicht gespeichert werden."));
     }
   }
   async function pdfForAbschlag(abschlag: any) {
@@ -291,7 +305,7 @@ export default function AbschlagEditorScreen({
         projectCode,
         fileName: `Abschlagsrechnung_${String(abschlag?.nummer || "1")}.pdf`,
         title: "Abschlagsrechnung",
-        subTitle: "Gespeicherter Abschlag",
+        subTitle: "ENTWURF – Gespeicherter Abschlag",
         docNo: String(abschlag?.nummer || ""),
         date: String(abschlag?.datum || ""),
         customer: {
@@ -331,7 +345,7 @@ export default function AbschlagEditorScreen({
         Alert.alert("Fehler", "Keine Basis-Rechnung gefunden.");
         return;
       }
-      if (!betragNum || betragNum <= 0) {
+      if (!Number.isFinite(betragNum) || betragNum <= 0) {
         Alert.alert("Fehler", "Bitte zuerst einen gültigen Betrag eingeben.");
         return;
       }
@@ -340,7 +354,7 @@ export default function AbschlagEditorScreen({
         projectCode,
         fileName: `Abschlagsrechnung_${String(doc.abschlagNr || "1")}.pdf`,
         title: "Abschlagsrechnung",
-        subTitle: "Eingang / Entwurf",
+        subTitle: "ENTWURF – Eingang / Prüfung",
         docNo: String(doc.abschlagNr || ""),
         date: String(doc.datum || ""),
         customer: {

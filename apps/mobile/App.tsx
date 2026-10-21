@@ -1,7 +1,7 @@
 // apps/mobile/App.tsx
 import "react-native-gesture-handler";
 import React, { useEffect } from "react";
-import { View, StatusBar, Pressable, Text, TextInput } from "react-native";
+import { View, StatusBar, Pressable, Text, TextInput, AppState } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { RootStackParamList } from "./src/navigation/types";
@@ -81,10 +81,12 @@ import CompanyImportScreen from "./src/screens/CompanyImportScreen";
 /* ================= SUPPORT ================= */
 
 import SupportChatScreen from "./src/screens/SupportChatScreen";
+import RechtlichesScreen from "./src/screens/RechtlichesScreen";
 
 /* ================= API ================= */
 
 import { api, IS_DEV } from "./src/lib/api";
+import { resumePendingServerSync } from "./src/lib/autoSync";
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 // Einheitliches, weiterhin barrierearmes Schriftverhalten auf iOS/Android.
@@ -215,6 +217,24 @@ const CompanyAdminWithKi = withGlobalKi(CompanyAdminScreen, "CompanyAdmin");
 const CompanyOfflineSetupWithKi = withGlobalKi(CompanyOfflineSetupScreen, "CompanyOfflineSetup");
 const CompanyImportWithKi = withGlobalKi(CompanyImportScreen, "CompanyImport");
 export default function App() {
+  useEffect(() => {
+    let disposed = false;
+    let checking = false;
+    const resume = async () => {
+      if (disposed || checking || AppState.currentState !== "active") return;
+      checking = true;
+      try {
+        await resumePendingServerSync();
+      } catch { /* Offline: queue stays intact until next foreground/interval check. */ }
+      finally { checking = false; }
+    };
+    const subscription = AppState.addEventListener("change", state => {
+      if (state === "active") void resume();
+    });
+    const interval = setInterval(() => { void resume(); }, 60000);
+    void resume();
+    return () => { disposed = true; subscription.remove(); clearInterval(interval); };
+  }, []);
   useEffect(() => {
     if (!IS_DEV) return;
     (async () => {
@@ -369,6 +389,9 @@ export default function App() {
         {/* SUPPORT */}
         <Stack.Screen name="SupportChat" component={SupportChatWithKi} options={{
         title: "Support"
+      }} />
+        <Stack.Screen name="Rechtliches" component={RechtlichesScreen} options={{
+        title: "Rechtliches & Datenschutz"
       }} />
 
         {/* PDF */}

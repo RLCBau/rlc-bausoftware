@@ -1,4 +1,4 @@
-// apps/mobile/src/screens/RechnungEditorScreen.tsx
+﻿// apps/mobile/src/screens/RechnungEditorScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, SafeAreaView, Alert, Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -9,8 +9,14 @@ import { COLORS, RLC_SPACING, RLC_RADIUS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
+import { saveInvoiceDraftOnServer, getInvoiceFiscalState, issueInvoiceOnServer } from "../lib/fiscalInvoice";
 import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
 import { parseRlcKiSmartDoc } from "../lib/rlcKiSmartParser";
+
+const devLog = (...args: any[]) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console["log"](...args);
+};
+
 type Props = NativeStackScreenProps<RootStackParamList, "RechnungEditor">;
 const KEY = "rlc_rechnung_list:";
 const OFFER_KEY = "rlc_angebot_list:";
@@ -26,11 +32,24 @@ type AbschlagItem = {
   pdfUri?: string;
   createdAt: number;
 };
+function localDocumentDate() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 function num(v: string | number | null | undefined) {
-  return Number(String(v ?? "").replace(",", ".") || 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v ?? "").trim().replace(/\s/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 function money(v: number) {
   return Number(v || 0).toLocaleString("de-DE", {
@@ -55,7 +74,7 @@ function normalizeAbschlag(a: any, idx: number): AbschlagItem {
   return {
     id: String(a?.id || makeId()),
     nummer: Number(a?.nummer || idx + 1),
-    datum: String(a?.datum || new Date().toISOString().slice(0, 10)),
+    datum: String(a?.datum || localDocumentDate()),
     betrag: Number(a?.betrag || 0),
     prozent: a?.prozent === null || a?.prozent === undefined ? undefined : Number(a.prozent || 0),
     note: String(a?.note || ""),
@@ -81,7 +100,7 @@ function createEmptyDoc(params: {
     mengenTitle: "",
     rechnungFromMengen: !!params.fromMengen,
     rechnungNr: `RE-${new Date().getFullYear()}-${Date.now().toString().slice(-5)}`,
-    datum: new Date().toISOString().slice(0, 10),
+    datum: localDocumentDate(),
     leistungszeitraum: "",
     customerName: "",
     address: "",
@@ -132,7 +151,7 @@ function normalizeAngebotToRechnung(a: any, prev: any) {
     address: String(a?.customerAddress || a?.address || a?.kundeAdresse || ""),
     email: String(a?.customerEmail || a?.email || ""),
     phone: String(a?.customerPhone || a?.phone || ""),
-    mwstPct: String(a?.mwstPct || a?.vatPct || prev?.mwstPct || "19"),
+    mwstPct: String(a?.mwstPct ?? a?.vatPct ?? prev?.mwstPct ?? "19"),
     note: String(prev?.note || "").trim() || "Automatisch aus Angebot übernommen.",
     rows
   };
@@ -165,7 +184,7 @@ function calcNettoFromRows(rows: any[]) {
 }
 function calcMwstFromDoc(d: any) {
   const netto = calcNettoFromRows(d?.rows || []);
-  return netto * num(d?.mwstPct || "19") / 100;
+  return netto * num(d?.mwstPct ?? "19") / 100;
 }
 function calcBruttoFromDoc(d: any) {
   const netto = calcNettoFromRows(d?.rows || []);
@@ -223,7 +242,7 @@ function normalizeStoredRechnung(input: any, params: {
     mengenTitle: String(input?.mengenTitle || ""),
     rechnungFromMengen: !!input?.rechnungFromMengen,
     rechnungNr: String(input?.rechnungNr || ""),
-    datum: String(input?.datum || new Date().toISOString().slice(0, 10)),
+    datum: String(input?.datum || localDocumentDate()),
     leistungszeitraum: String(input?.leistungszeitraum || ""),
     customerName: String(input?.customerName || ""),
     address: String(input?.address || ""),
@@ -236,7 +255,7 @@ function normalizeStoredRechnung(input: any, params: {
     steuerNr: String(input?.steuerNr || ""),
     ustId: String(input?.ustId || ""),
     zahlungsziel: String(input?.zahlungsziel || "14 Tage"),
-    mwstPct: String(input?.mwstPct || "19"),
+    mwstPct: String(input?.mwstPct ?? "19"),
     note: String(input?.note || ""),
     pdfUri: String(input?.pdfUri || ""),
     updatedAt: Number(input?.updatedAt || Date.now()),
@@ -391,7 +410,7 @@ export default function RechnungEditorScreen({
       setAngebotList(normalized);
       return normalized;
     } catch (e) {
-      console.log("loadAngebote server fallback -> local", e);
+      devLog("loadAngebote server fallback -> local", e);
       const raw = await AsyncStorage.getItem(OFFER_KEY + projectCode);
       const list = raw ? JSON.parse(raw) : [];
       const normalized = Array.isArray(list) ? list : [];
@@ -415,7 +434,7 @@ export default function RechnungEditorScreen({
       setMengenList(normalized);
       return normalized;
     } catch (e) {
-      console.log("loadMengen server fallback -> local", e);
+      devLog("loadMengen server fallback -> local", e);
       const raw = await AsyncStorage.getItem(MENGEN_KEY + projectCode);
       const list = raw ? JSON.parse(raw) : [];
       const normalized = Array.isArray(list) ? list : [];
@@ -439,7 +458,7 @@ export default function RechnungEditorScreen({
       await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(normalized));
       return normalized;
     } catch (e) {
-      console.log("loadRechnungen server fallback -> local", e);
+      devLog("loadRechnungen server fallback -> local", e);
       const raw = await AsyncStorage.getItem(KEY + projectCode);
       const list = raw ? JSON.parse(raw) : [];
       return Array.isArray(list) ? list : [];
@@ -619,7 +638,7 @@ export default function RechnungEditorScreen({
         fromMengenId: mengenId || null
       }));
     } catch (e) {
-      console.log("LOAD RECHNUNG ERROR", e);
+      devLog("LOAD RECHNUNG ERROR", e);
       Alert.alert("Fehler", "Rechnung konnte nicht geladen werden.");
     } finally {
       setLoading(false);
@@ -646,7 +665,7 @@ export default function RechnungEditorScreen({
         abschlaege: Array.isArray(prev?.abschlaege) ? prev.abschlaege : []
       }));
     } catch (e) {
-      console.log("IMPORT ANGEBOT ERROR", e);
+      devLog("IMPORT ANGEBOT ERROR", e);
       Alert.alert("Fehler", "Angebot konnte nicht übernommen werden.");
     }
   }
@@ -679,7 +698,7 @@ export default function RechnungEditorScreen({
         projectCode: String(prev?.projectCode || projectCode || "")
       }));
     } catch (e) {
-      console.log("IMPORT MENGEN ERROR", e);
+      devLog("IMPORT MENGEN ERROR", e);
       Alert.alert("Fehler", "Mengenermittlung konnte nicht übernommen werden.");
     }
   }
@@ -718,18 +737,14 @@ export default function RechnungEditorScreen({
         return {
           ...prev,
           rechnungNr: parsed.rechnungNr || prev.rechnungNr,
-          datum: parsed.datum || prev.datum || new Date().toISOString().slice(0, 10),
+          datum: parsed.datum || prev.datum || localDocumentDate(),
           leistungszeitraum: parsed.leistungszeitraum || prev.leistungszeitraum,
           customerName: parsed.customerName || prev.customerName,
           address: parsed.address || prev.address,
           email: parsed.email || prev.email,
           phone: parsed.phone || prev.phone,
-          mwstPct: prev?.mwstPct || "19",
-          note: parsed.warnings?.length ? `${parsed.note || ""}
-
-RLC KI Hinweise:
-${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || prev.note,
-          rows: parsedRows,
+          mwstPct: prev?.mwstPct ?? "19",
+          note: parsed.note || prev.note,
           updatedAt: Date.now()
         };
       });
@@ -755,11 +770,14 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
   const rest = useMemo(() => Math.max(0, brutto - bezahlt), [brutto, bezahlt]);
   async function persistDoc(nextDoc?: any) {
     const base = nextDoc || doc;
+    if (["AUSGESTELLT", "KORRIGIERT", "STORNIERT"].includes(String(base?.fiscalStatus || "").toUpperCase())) {
+      throw new Error("FISCAL_DOCUMENT_IMMUTABLE");
+    }
     const normalizedRows = Array.isArray(base?.rows) && base.rows.length ? base.rows.map((r: any, i: number) => normalizeRow(r, i)) : [normalizeRow({}, 0)];
     const tempDoc = {
       ...base,
       rows: normalizedRows,
-      mwstPct: String(base?.mwstPct || "19").trim()
+      mwstPct: String(base?.mwstPct ?? "19").trim()
     };
     const calcNetto = calcNettoFromRows(tempDoc.rows);
     const calcMwst = calcMwstFromDoc(tempDoc);
@@ -795,6 +813,8 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       netto: calcNetto,
       mwst: calcMwst,
       brutto: calcBrutto,
+      // Speichern erzeugt ausschließlich einen Entwurf; keine steuerliche Ausstellung.
+      fiscalStatus: "ENTWURF",
       abschlaege: Array.isArray(tempDoc.abschlaege) ? tempDoc.abschlaege.map((a: any, i: number) => normalizeAbschlag(a, i)) : [],
       rows: normalizedRows
     };
@@ -812,7 +832,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       title: normalized.rechnungNr || "Rechnung",
       doc: normalized,
       pdfUri: normalized.pdfUri || null,
-      status: "EINGEREICHT",
+      status: "DRAFT",
       sourceScreen: "RechnungEditor"
     });
     setDoc(normalized);
@@ -824,11 +844,59 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       await persistDoc();
       navigation.goBack();
     } catch (e) {
-      console.log("SAVE RECHNUNG ERROR", e);
+      devLog("SAVE RECHNUNG ERROR", e);
       Alert.alert("Fehler", "Rechnung konnte nicht gespeichert werden.");
     } finally {
       setBusy(false);
     }
+  }
+  async function syncFiscalDraft() {
+    try {
+      if (await getMode() === "NUR_APP") {
+        Alert.alert("Nur App", "Die Fiskal-Synchronisierung benötigt eine Server-Verbindung.");
+        return;
+      }
+      setBusy(true);
+      const draft = await persistDoc();
+      await saveInvoiceDraftOnServer(draft.projectId || projectId || projectCode, draft);
+      Alert.alert("Server bestätigt", "Rechnungsentwurf gespeichert. Nicht steuerlich ausgestellt.");
+    } catch (error: any) {
+      Alert.alert("Server nicht bestätigt", String(error?.message || "Entwurf bleibt lokal gespeichert.").slice(0, 300));
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function issueFiscalInvoice() {
+    if (busy) return;
+    try {
+      if (await getMode() === "NUR_APP") {
+        Alert.alert("Nur App", "Die steuerliche Ausstellung ist nur über den Server möglich.");
+        return;
+      }
+      setBusy(true);
+      const pk = String(doc.projectId || projectId || projectCode);
+      const current = await getInvoiceFiscalState(pk, doc.id);
+      if (current.fiscalStatus !== "ENTWURF") {
+        Alert.alert("Keine Ausstellung möglich", `Serverstatus: ${current.fiscalStatus || "unbekannt"}`);
+        setBusy(false);
+        return;
+      }
+      Alert.alert("Rechnung verbindlich ausstellen?", "Dieser Vorgang erzeugt steuerliche Belege und ein unveränderbares Archiv. Danach ist kein Entwurf-Editieren mehr möglich.", [
+        { text:"Abbrechen", style:"cancel", onPress: () => setBusy(false) },
+        { text:"Verbindlich ausstellen", style:"destructive", onPress: () => { void (async () => {
+          try {
+            const issued = await issueInvoiceOnServer(pk, doc.id);
+            setDoc((prev: any) => ({ ...prev, fiscalStatus:"AUSGESTELLT" }));
+            Alert.alert("Rechnung ausgestellt", issued.reconciliationRequired ? "Steuerlich ausgestellt. Buchhaltungsabgleich erforderlich." : "Der Server hat die steuerliche Ausstellung bestätigt.");
+          } catch (error: any) {
+            Alert.alert("Status prüfen", String(error?.message || "Ausstellung nicht bestätigt.").slice(0, 300) + "\nNicht erneut ausstellen, bevor der Serverstatus geprüft ist.");
+          } finally { setBusy(false); }
+        })(); } }
+      ]);
+    } catch (error: any) {
+      Alert.alert("Serverstatus nicht verfügbar", String(error?.message || error).slice(0, 300));
+      setBusy(false);
+    } finally { /* busy remains set until confirmation is cancelled or issue completes */ }
   }
   async function openLinkedMengenPdf() {
     try {
@@ -845,7 +913,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         documentType: "MENGENERMITTLUNG"
       });
     } catch (e) {
-      console.log("SHARE LINKED MENGEN PDF ERROR", e);
+      devLog("SHARE LINKED MENGEN PDF ERROR", e);
       Alert.alert("Fehler", "Mengenermittlung-PDF konnte nicht geteilt werden.");
     }
   }
@@ -868,7 +936,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         projectCode: saved.projectCode || projectCode,
         fileName: `${fileNameBase}.pdf`,
         title: "RECHNUNG",
-        subTitle: saved.sourceType === "MENGEN" ? "Erstellt aus Mengenermittlung" : saved.sourceType === "ANGEBOT" ? "Erstellt aus Angebot" : "Freie Rechnung",
+        subTitle: `ENTWURF – ${saved.sourceType === "MENGEN" ? "Erstellt aus Mengenermittlung" : saved.sourceType === "ANGEBOT" ? "Erstellt aus Angebot" : "Freie Rechnung"}`,
         docNo: saved.rechnungNr || "",
         date: saved.datum || "",
         period: saved.leistungszeitraum || "",
@@ -881,7 +949,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         rows: buildPdfRows(saved.rows || []),
         totals: {
           netto: Number(saved?.netto || 0),
-          mwstPct: num(saved?.mwstPct || "19"),
+          mwstPct: num(saved?.mwstPct ?? "19"),
           mwstValue: Number(saved?.mwst || 0),
           brutto: Number(saved?.brutto || 0)
         },
@@ -914,7 +982,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         });
       }
     } catch (e) {
-      console.log("PDF RECHNUNG ERROR", e);
+      devLog("PDF RECHNUNG ERROR", e);
       Alert.alert("Fehler", "PDF konnte nicht erstellt werden.");
     } finally {
       setBusy(false);
@@ -933,7 +1001,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         projectCode: saved.projectCode || projectCode,
         fileName: `${fileNameBase}_schlussrechnung.pdf`,
         title: "SCHLUSSRECHNUNG",
-        subTitle: (saved.abschlaege || []).length > 0 ? "Restbetrag nach Abschlägen" : "Schlussbetrag",
+        subTitle: `ENTWURF – ${(saved.abschlaege || []).length > 0 ? "Restbetrag nach Abschlägen" : "Schlussbetrag"}`,
         docNo: saved.rechnungNr || "",
         date: saved.datum || "",
         period: saved.leistungszeitraum || "",
@@ -946,7 +1014,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         rows: buildPdfRows(saved.rows || []),
         totals: {
           netto: Number(saved?.netto || 0),
-          mwstPct: num(saved?.mwstPct || "19"),
+          mwstPct: num(saved?.mwstPct ?? "19"),
           mwstValue: Number(saved?.mwst || 0),
           bezahlt: bezahlt,
           rest: finalRest,
@@ -981,7 +1049,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         });
       }
     } catch (e) {
-      console.log("PDF SCHLUSSRECHNUNG ERROR", e);
+      devLog("PDF SCHLUSSRECHNUNG ERROR", e);
       Alert.alert("Fehler", "Schlussrechnung-PDF konnte nicht erstellt werden.");
     } finally {
       setBusy(false);
@@ -1039,7 +1107,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         projectCode: saved.projectCode || projectCode,
         fileName: `${fileNameBase}.pdf`,
         title: "ABSCHLAGSRECHNUNG",
-        subTitle: `Abschlag Nr. ${item.nummer}`,
+        subTitle: `ENTWURF – Abschlag Nr. ${item.nummer}`,
         docNo: saved.rechnungNr || "",
         date: item.datum || "",
         period: saved.leistungszeitraum || "",
@@ -1094,7 +1162,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         });
       }
     } catch (e) {
-      console.log("PDF ABSCHLAG ERROR", e);
+      devLog("PDF ABSCHLAG ERROR", e);
       Alert.alert("Fehler", "Abschlag-PDF konnte nicht erstellt werden.");
     } finally {
       setBusy(false);
@@ -1123,7 +1191,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       const nextItem: AbschlagItem = {
         id: makeId(),
         nummer: (doc.abschlaege?.length || 0) + 1,
-        datum: new Date().toISOString().slice(0, 10),
+        datum: localDocumentDate(),
         betrag,
         prozent,
         note: abschlagNoteInput.trim(),
@@ -1141,7 +1209,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
       setAbschlagNoteInput("");
       Alert.alert("Erfolg", "Abschlag wurde gespeichert. Jetzt kannst du das PDF erstellen.");
     } catch (e) {
-      console.log("ADD ABSCHLAG ERROR", e);
+      devLog("ADD ABSCHLAG ERROR", e);
       Alert.alert("Fehler", "Abschlag konnte nicht gespeichert werden.");
     }
   }
@@ -1165,7 +1233,7 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
           setDoc(nextDoc);
           await persistDoc(nextDoc);
         } catch (e) {
-          console.log("DELETE ABSCHLAG ERROR", e);
+          devLog("DELETE ABSCHLAG ERROR", e);
           Alert.alert("Fehler", "Abschlag konnte nicht gelöscht werden.");
         }
       }
@@ -1368,6 +1436,13 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : parsed.note || pre
         </Pressable>
         </View>
 
+        <Text style={s.sourceText}>Status: Entwurf — Speichern oder PDF erstellen stellt keine Rechnung steuerlich aus. Die verbindliche Ausstellung mit XRechnung und revisionssicherer Ablage erfolgt ausschließlich nach Freigabe im Server-Workflow.</Text>
+        <Pressable style={s.btnSecondary} onPress={() => void issueFiscalInvoice()} disabled={busy || String(doc.fiscalStatus || "ENTWURF") !== "ENTWURF"}>
+          <Text style={s.btnTxt}>Rechnung verbindlich ausstellen (Server)</Text>
+        </Pressable>
+        <Pressable style={s.btnSecondary} onPress={() => void syncFiscalDraft()} disabled={busy || String(doc.fiscalStatus || "") === "AUSGESTELLT"}>
+          <Text style={s.btnTxt}>Entwurf am Server speichern</Text>
+        </Pressable>
         <Pressable style={s.save} onPress={save} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? "Bitte warten..." : "Speichern"}</Text>
         </Pressable>

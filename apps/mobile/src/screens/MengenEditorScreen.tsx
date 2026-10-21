@@ -7,6 +7,8 @@ import { RootStackParamList } from "../navigation/types";
 import { COLORS, RLC_SPACING, RLC_RADIUS, createRlcStyles } from "../ui/theme";
 import { buildDocumentPdf } from "../lib/exporters/documentPdfBuilder";
 import { api } from "../lib/api";
+import { queueAdd } from "../lib/offlineQueue";
+import { syncAll } from "../lib/sync";
 import { submitToEingangPruefung } from "../lib/submitToEingangPruefung";
 import RlcKiFloatingButton from "../components/RlcKiFloatingButton";
 import { registerRlcKiModuleHandler } from "../lib/rlcKiModuleBridge";
@@ -19,7 +21,16 @@ function makeId() {
   return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 function num(v: string | number | null | undefined) {
-  return Number(String(v ?? "").replace(",", ".") || 0);
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v ?? "").trim().replace(/\s/g, "");
+  if (!raw) return 0;
+  const comma = raw.lastIndexOf(",");
+  const dot = raw.lastIndexOf(".");
+  const normalized = comma > dot
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : comma >= 0 ? raw.replace(",", ".") : raw;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 function money(v: number) {
   return Number(v || 0).toLocaleString("de-DE", {
@@ -45,7 +56,7 @@ function deepClone<T>(v: T): T {
 function normalizeMengenRow(r: any, idx: number) {
   return {
     id: String(r?.id || makeId()),
-    pos: String(r?.pos || idx + 1),
+    pos: String(r?.pos || ""),
     text: String(r?.text || r?.beschreibung || ""),
     unit: String(r?.unit || r?.einheit || ""),
     formula: String(r?.formula || ""),
@@ -128,6 +139,7 @@ function normalizeStoredDoc(input: any, params: {
     pdfUri: String(input?.pdfUri || ""),
     createdAt: Number(input?.createdAt || Date.now()),
     updatedAt: Number(input?.updatedAt || Date.now()),
+    version: Number(input?.version || 0),
     rows: Array.isArray(input?.rows) && input.rows.length ? input.rows.map((r: any, i: number) => normalizeMengenRow(r, i)) : [normalizeMengenRow({}, 0)]
   };
 }
@@ -190,11 +202,9 @@ export default function MengenEditorScreen({
       return Array.isArray(list) ? list : [];
     }
     try {
-      const raw = await AsyncStorage.getItem(KEY + projectCode);
-      const local = raw ? JSON.parse(raw) : [];
+      // SERVER_SYNC: PostgreSQL/API is authoritative; local storage is cache only.
       const server = await api.getMengen(projectCode);
-      const combined = [...(Array.isArray(server) ? server : []), ...(Array.isArray(local) ? local : [])];
-      const safe = combined.filter((item: any, index: number, all: any[]) => all.findIndex((candidate: any) => String(candidate?.id) === String(item?.id)) === index);
+      const safe = Array.isArray(server) ? server : [];
       await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(safe));
       return safe;
     } catch (e) {
@@ -227,6 +237,11 @@ export default function MengenEditorScreen({
     try {
       setLoading(true);
       const mengenList = await readMengenList();
+      // A new measurement must never silently reopen or overwrite the latest existing one.
+      if (!mengenId && !angebotId) {
+        setDoc(createEmptyDoc({ projectId, projectCode, angebotId: null }));
+        return;
+      }
       if (mengenId) {
         const found = mengenList.find((x: any) => String(x?.id) === String(mengenId));
         if (found) {
@@ -334,7 +349,7 @@ export default function MengenEditorScreen({
     setDoc((prev: any) => ({
       ...prev,
       rows: [...prev.rows, normalizeMengenRow({
-        pos: String((prev.rows?.length || 0) + 1)
+        pos: ""
       }, prev.rows?.length || 0)],
       updatedAt: Date.now()
     }));
@@ -345,7 +360,7 @@ export default function MengenEditorScreen({
       rows.splice(i, 1);
       const normalizedRows = rows.length > 0 ? rows.map((r: any, idx: number) => normalizeMengenRow({
         ...r,
-        pos: String(idx + 1)
+        pos: r.pos
       }, idx)) : [normalizeMengenRow({}, 0)];
       return {
         ...prev,
@@ -374,25 +389,46 @@ export default function MengenEditorScreen({
       updatedAt: Date.now(),
       rows: Array.isArray(base.rows) && base.rows.length ? base.rows.map((r: any, i: number) => normalizeMengenRow(r, i)) : [normalizeMengenRow({}, 0)]
     };
-    const raw = await AsyncStorage.getItem(KEY + projectCode);
-    const list = raw ? JSON.parse(raw) : [];
-    const next = Array.isArray(list) ? list : [];
-    const idx = next.findIndex((x: any) => String(x.id) === String(normalized.id));
-    if (idx >= 0) next[idx] = normalized;else next.unshift(normalized);
-    await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(next));
-    await submitToEingangPruefung({
-      type: "MENGENERMITTLUNG",
-      projectKey: normalized.projectCode || projectCode,
-      projectId: normalized.projectId || projectId,
-      projectCode: normalized.projectCode || projectCode,
-      title: normalized.title || "Mengenermittlung",
-      doc: normalized,
-      pdfUri: normalized.pdfUri || null,
-      status: "EINGEREICHT",
-      sourceScreen: "MengenEditor"
-    });
-    setDoc(normalized);
-    return normalized;
+    const writeCache = async (value: any) => {
+      const raw = await AsyncStorage.getItem(KEY + projectCode);
+      const list = raw ? JSON.parse(raw) : [];
+      const next = Array.isArray(list) ? [...list] : [];
+      const idx = next.findIndex((x: any) => String(x.id) === String(value.id));
+      if (idx >= 0) next[idx] = value; else next.unshift(value);
+      await AsyncStorage.setItem(KEY + projectCode, JSON.stringify(next));
+    };
+
+    if (await getMode() === "NUR_APP") {
+      await writeCache(normalized);
+      setDoc(normalized);
+      return normalized;
+    }
+
+    try {
+      const response = await api.saveMengen(projectCode, {
+        ...normalized,
+        baseVersion: Number(normalized.version || 0),
+      });
+      const serverDoc = response?.document;
+      if (!response?.ok || !serverDoc?.id) throw new Error("MENGEN_SERVER_SAVE_NOT_CONFIRMED");
+      await writeCache(serverDoc);
+      setDoc(serverDoc);
+      return serverDoc;
+    } catch (error: any) {
+      if (String(error?.message || error).includes("VERSION_CONFLICT")) throw error;
+      // Temporary offline fallback: cache and queue the exact versioned document for retry.
+      await writeCache(normalized);
+      await queueAdd({
+        kind: "MENGEN_SYNC",
+        projectId: projectCode,
+        dedupeKey: `mengen:${normalized.id}`,
+        payload: { doc: { ...normalized, baseVersion: Number(normalized.version || 0) } },
+      } as any);
+      // The offline queue is retried by the regular synchronizer.
+      // Never block UI/pdf actions waiting for the entire project queue.
+      setDoc(normalized);
+      return normalized;
+    }
   }
   async function save() {
     try {
@@ -402,6 +438,33 @@ export default function MengenEditorScreen({
     } catch (e) {
       console.log("SAVE MENGEN ERROR", e);
       Alert.alert("Fehler", "Speichern fehlgeschlagen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function submitMengen() {
+    try {
+      setBusy(true);
+      const missing = (doc.rows || []).filter((row: any) => !String(row.pos || "").trim() || !String(row.text || "").trim());
+      if (missing.length) {
+        Alert.alert("LV-Position fehlt", "Bitte jeder Position die exakte LV-OZ und eine Beschreibung zuordnen. Ohne OZ ist keine Übernahme ins Web-Aufmaß möglich.");
+        return;
+      }
+      const normalized = await persistDoc();
+      await submitToEingangPruefung({
+        type: "MENGENERMITTLUNG",
+        projectKey: normalized.projectCode || projectCode,
+        projectId: normalized.projectId || projectId,
+        projectCode: normalized.projectCode || projectCode,
+        title: normalized.title || "Mengenermittlung",
+        doc: normalized,
+        pdfUri: normalized.pdfUri || null,
+        status: "EINGEREICHT",
+        sourceScreen: "MengenEditor"
+      });
+      Alert.alert("Mengenermittlung", "Zur Eingangsprüfung eingereicht.");
+    } catch (error: any) {
+      Alert.alert("Einreichen fehlgeschlagen", String(error?.message || error));
     } finally {
       setBusy(false);
     }
@@ -500,8 +563,7 @@ export default function MengenEditorScreen({
           title: parsed.title || parsed.baustelle || prev?.title || "Mengenermittlung",
           datum: parsed.datum || prev?.datum || new Date().toISOString().slice(0, 10),
           rows: parsedRows,
-          note: parsed.warnings?.length ? `RLC KI Hinweise:
-${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : prev?.note,
+          note: prev?.note,
           updatedAt: Date.now()
         };
       });
@@ -557,12 +619,22 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : prev?.note,
         const total = num(r.qty) * num(r.ep);
         return <View key={r.id} style={s.rowCard}>
               <View style={s.rowHeader}>
-                <Text style={s.pos}>Pos {r.pos}</Text>
+                <Text style={s.pos}>LV OZ: {r.pos || "nicht zugeordnet"}</Text>
                 <Pressable onPress={() => removeRow(i)} style={s.delBtn}>
                   <Text style={s.delete}>✕</Text>
                 </Pressable>
               </View>
 
+              <Text style={s.label}>LV-Position (OZ) · genaue Nummer aus Aufmaß / LV</Text>
+              <TextInput
+                placeholder="z.B. 02.04.0490"
+                value={String(r.pos || "")}
+                onChangeText={v => updateRow(i, "pos", v.trim())}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={s.input}
+                placeholderTextColor={COLORS.sub}
+              />
               <TextInput placeholder="Beschreibung" value={String(r.text || "")} onChangeText={v => updateRow(i, "text", v)} style={s.input} placeholderTextColor={COLORS.sub} />
 
               <View style={s.row}>
@@ -600,6 +672,10 @@ ${parsed.warnings.map((w: string) => `- ${w}`).join("\n")}` : prev?.note,
 
         <Pressable style={s.save} onPress={save} disabled={busy}>
           <Text style={s.btnTxt}>{busy ? "Bitte warten..." : "Speichern"}</Text>
+        </Pressable>
+
+        <Pressable style={s.save} onPress={submitMengen} disabled={busy}>
+          <Text style={s.btnTxt}>{busy ? "Bitte warten..." : "Zur Eingangsprüfung einreichen"}</Text>
         </Pressable>
 
         <Pressable style={s.rechnung} onPress={createRechnung} disabled={busy}>

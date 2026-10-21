@@ -1,6 +1,13 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { getAuthMode, getServerToken } from "./auth";
-import { getApiUrl } from "./api";
+import { getApiUrl, resolveProjectCode } from "./api";
+
+const devLog = (...args: any[]) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console["log"](...args);
+};
+const devWarn = (...args: any[]) => {
+  if (typeof __DEV__ !== "undefined" && __DEV__) console["warn"](...args);
+};
 
 export type MobilePdfDocumentType =
   | "REGIE"
@@ -79,7 +86,7 @@ async function enrichLocalAssets(value: unknown): Promise<unknown> {
         };
       }
     } catch (error) {
-      console.warn("[PDF STRING ASSET BASE64]", localUri, error);
+      devWarn("[PDF STRING ASSET BASE64]", localUri, error);
     }
   }
 
@@ -133,7 +140,7 @@ async function enrichLocalAssets(value: unknown): Promise<unknown> {
           "Foto";
       }
     } catch (error) {
-      console.warn("[PDF ASSET BASE64]", localUri, error);
+      devWarn("[PDF ASSET BASE64]", localUri, error);
     }
   }
 
@@ -153,9 +160,14 @@ async function enrichLocalAssets(value: unknown): Promise<unknown> {
 
   return result;
 }
+function validatePdfBase64(base64: string): string {
+  const clean = String(base64 || "").trim().replace(/^data:application\/pdf;base64,/i, "");
+  if (!/^JVBERi0/.test(clean)) throw new Error("Ungültiges PDF: Dateisignatur fehlt.");
+  return clean;
+}
+
 async function writeBase64Pdf(uri: string, base64: string) {
-  const clean = String(base64 || "").replace(/^data:application\/pdf;base64,/i, "");
-  if (!clean) throw new Error("Server hat kein PDF geliefert.");
+  const clean = validatePdfBase64(base64);
   await FileSystem.writeAsStringAsync(uri, clean, {
     encoding: FileSystem.EncodingType.Base64,
   });
@@ -178,22 +190,31 @@ export async function renderMobilePdfViaServer(input: RenderInput): Promise<Rend
     );
   }
 
-  console.log("[PDF SERVER AUTH]", {
+  devLog("[PDF SERVER AUTH]", {
     mode,
     tokenLength: token.length,
     tokenType: token.split(".").length === 3 ? "JWT" : "UNKNOWN",
   });
 
   const apiUrl = String(await getApiUrl()).replace(/\/$/, "");
-  console.log("[PDF SERVER]", {
+  devLog("[PDF SERVER]", {
     apiUrl,
     tokenLength: token.length,
     tokenType: token.startsWith("local:") ? "LOCAL" : token.split(".").length === 3 ? "JWT" : "UNKNOWN",
   });
-  const target = await ensureOutputPath(input.projectFsKey, input.fileName);
-  const preparedPayload = await enrichLocalAssets(input.payload);
+  const resolvedCode = await resolveProjectCode(input.projectFsKey);
+  if (!resolvedCode || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(resolvedCode)) {
+    throw new Error("Baustellennummer fehlt: Projektzuordnung in RLC Web prüfen.");
+  }
+  const target = await ensureOutputPath(resolvedCode, input.fileName);
+  const preparedPayload = await enrichLocalAssets({
+    ...(input.payload && typeof input.payload === "object" && !Array.isArray(input.payload) ? input.payload as Record<string, unknown> : {}),
+    projectCode: resolvedCode,
+    projectFsKey: resolvedCode,
+    projectId: resolvedCode,
+  });
 
-  console.log("[PDF ASSETS PREPARED]");
+  devLog("[PDF ASSETS PREPARED]");
 
   const response = await fetch(`${apiUrl}/api/pdf/mobile-render`, {
     method: "POST",
@@ -205,13 +226,13 @@ export async function renderMobilePdfViaServer(input: RenderInput): Promise<Rend
     },
     body: JSON.stringify({
       documentType: input.documentType,
-      projectFsKey: input.projectFsKey,
+      projectFsKey: resolvedCode,
       fileName: target.fileName,
       payload: preparedPayload,
     }),
   });
 
-  console.log("[PDF SERVER RESPONSE]", response.status, response.url);
+  devLog("[PDF SERVER RESPONSE]", response.status, response.url);
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
@@ -222,6 +243,9 @@ export async function renderMobilePdfViaServer(input: RenderInput): Promise<Rend
 
   if (contentType.includes("application/pdf")) {
     const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.length < 5 || String.fromCharCode(...bytes.subarray(0, 5)) !== "%PDF-") {
+      throw new Error("Ungültiges PDF: Dateisignatur fehlt.");
+    }
     await writeBase64Pdf(target.uri, bytesToBase64(bytes));
   } else {
     const json: any = await response.json();
@@ -236,6 +260,10 @@ export async function renderMobilePdfViaServer(input: RenderInput): Promise<Rend
       await FileSystem.downloadAsync(absoluteUrl, target.uri, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const downloadedBase64 = await FileSystem.readAsStringAsync(target.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      validatePdfBase64(downloadedBase64);
     } else {
       throw new Error(json?.error || "Serverantwort enthält kein PDF.");
     }

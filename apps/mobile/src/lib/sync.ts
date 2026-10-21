@@ -1,6 +1,6 @@
-﻿// apps/mobile/src/lib/sync.ts
-import AsyncStorage from "@react-native-async-storage/async-storage";
+// apps/mobile/src/lib/sync.ts
 import { api } from "./api";
+import { getServerToken } from "./auth";
 import { queueList, queueUpdate, QueueItem, DateiMeta } from "./offlineQueue";
 
 /**
@@ -91,9 +91,18 @@ async function projectKeyForTarget(opts?: SyncOptions): Promise<string> {
  * - tutto (se opts non dato)
  * - SOLO un progetto (se opts.projectId o opts.projectCode dato)
  */
-export async function syncAll(
-  opts?: SyncOptions
-): Promise<{ ok: number; fail: number }> {
+let syncInFlight: Promise<{ ok: number; fail: number }> | null = null;
+
+/** Single-flight prevents concurrent screens from uploading the same queued attachment twice. */
+export function syncAll(opts?: SyncOptions): Promise<{ ok: number; fail: number }> {
+  if (syncInFlight) return syncInFlight.then(() => syncAll(opts));
+  const current = syncAllOnce(opts);
+  syncInFlight = current;
+  void current.finally(() => { if (syncInFlight === current) syncInFlight = null; }).catch(() => {});
+  return current;
+}
+
+async function syncAllOnce(opts?: SyncOptions): Promise<{ ok: number; fail: number }> {
   const list = await queueList();
   let ok = 0,
     fail = 0;
@@ -105,6 +114,10 @@ export async function syncAll(
 
   for (const item of list) {
     if (item.status === "DONE") continue;
+    // Rispetta il backoff previsto dalla coda; un invio fallito non deve
+    // essere ripetuto immediatamente da ogni schermata.
+    if (item.nextTryAt && item.nextTryAt > Date.now()) continue;
+    if ((item.tries || 0) >= 8 && item.status === "ERROR") continue;
 
     // ✅ filtro per progetto (se richiesto)
     if (targetPk) {
@@ -112,32 +125,32 @@ export async function syncAll(
       if (itemPk !== targetPk) continue;
     }
 
+    const triesNow = (item.tries || 0) + 1;
     try {
-      await syncOne(item);
-      await queueUpdate(item.id, { status: "DONE", error: undefined });
+      await queueUpdate(item.id, { lastTryAt: Date.now(), tries: triesNow });
+      const acknowledged = await syncOne(item);
+      // Never commit a queued document on a bare HTTP 200, empty JSON, or null.
+      // A positive application-level ACK is mandatory before DONE.
+      if (!acknowledged || typeof acknowledged !== "object" || acknowledged.ok !== true) {
+        throw new Error("SERVER_SYNC_ACK_MISSING_OR_REJECTED");
+      }
+      await queueUpdate(item.id, { status: "DONE", error: undefined, nextTryAt: null, result: acknowledged });
       ok++;
     } catch (e: any) {
+      const msg = String(e?.message || "sync failed");
+      const offline = /network request failed|failed to fetch|networkerror|offline|timeout|socket/i.test(msg);
+      const retryDelay = Math.min(300000, Math.max(5000, 2 ** triesNow * 1000));
       await queueUpdate(item.id, {
-        status: "ERROR",
-        error: e?.message || "sync failed",
+        status: offline ? "PENDING" : "ERROR",
+        error: offline ? undefined : msg.slice(0, 500),
+        tries: offline ? item.tries || 0 : triesNow,
+        nextTryAt: Date.now() + retryDelay,
       });
       fail++;
+      if (offline) break;
     }
   }
   return { ok, fail };
-}
-
-function normalizeLsUploadItems(
-  up: any
-): Array<{ name: string; type: string; publicUrl: string }> {
-  const items = Array.isArray(up?.items) ? up.items : [];
-  return items
-    .map((x: any) => ({
-      name: String(x?.name || "upload"),
-      type: String(x?.type || "application/octet-stream"),
-      publicUrl: String(x?.publicUrl || ""),
-    }))
-    .filter((x: any) => !!x.publicUrl);
 }
 
 /** =========================
@@ -164,7 +177,7 @@ async function serverRequest<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getServerToken();
   const headers: Record<string, any> = { ...(init.headers as any) };
 
   // JSON only (NOT for FormData)
@@ -210,8 +223,9 @@ async function uploadPhotoNoteInbox(pk: string, p: any) {
   const mainUri =
     String(p?.imageUri || "").trim() ||
     String(filesArr?.[0]?.uri || "").trim();
-  const remaining =
-    mainUri && !String(p?.imageUri || "").trim() ? filesArr.slice(1) : filesArr;
+  const remaining = mainUri
+    ? filesArr.filter(f => String(f?.uri || "").trim() !== mainUri)
+    : filesArr;
 
   const fd = new FormData();
   fd.append("projectId", pk);
@@ -248,7 +262,7 @@ async function uploadPhotoNoteInbox(pk: string, p: any) {
   }
 
   // ✅ endpoint CORRETTO del tuo server (routes/fotos.ts)
-  return serverRequest("/api/fotos/inbox/upload", {
+  return serverRequest<{ ok: boolean; docId: string }>("/api/fotos/inbox/upload", {
     method: "POST",
     body: fd as any,
   });
@@ -262,9 +276,12 @@ async function syncOne(item: QueueItem) {
   // REGIE
   // =========================
   if (item.kind === "REGIE") {
+    const raw: any = item.payload || {};
     const payload = {
-      ...(item.payload || {}),
-      projectId: pk, // server FS-key
+      ...(raw.row ?? raw),
+      projectId: pk,
+      projectCode: pk,
+      workflowStatus: "EINGEREICHT",
     };
     return (api as any).pushRegieToServer(pk, payload);
   }
@@ -310,108 +327,54 @@ async function syncOne(item: QueueItem) {
   }
 
   // =========================
+  // ARBEITSZEIT (Zeitbuchungen mit GPS-Belegen)
+  // =========================
+  if (item.kind === "ARBEITSZEIT") {
+    const raw: any = item.payload || {};
+    const row = raw?.row ?? raw;
+    const result = await serverRequest<{ ok?: boolean }>(`/api/inbox/${encodeURIComponent(pk)}/ARBEITSZEIT/submit`, {
+      method: "POST",
+      body: JSON.stringify({ ...row, projectKey: pk, projectCode: pk }),
+    });
+    if (result?.ok !== true) throw new Error("ARBEITSZEIT_INBOX_NOT_CONFIRMED");
+    return result;
+  }
+
+  // =========================
   // LIEFERSCHEIN (Upload + Commit)
   // =========================
   if (item.kind === "LIEFERSCHEIN") {
     const p: any = item.payload || {};
-
-    const uploads: Array<{ name: string; type: string; publicUrl: string }> = [];
-    const files: DateiMeta[] = Array.isArray(p.files) ? p.files : [];
-
-    // a) Multi-files (preferito): UNA chiamata a /api/ls/upload
-    if (files.length > 0) {
-      const batch = files
-        .map((f) => ({
-          uri: f?.uri,
-          name: f?.name,
-          type: f?.type,
-        }))
-        .filter((f) => !!f.uri) as Array<{ uri: string; name?: string; type?: string }>;
-
-      if (batch.length) {
-        // deve esistere in api.ts:
-        // uploadLieferscheinFiles(projectKey, batch, note?)
-        const up = await (api as any).uploadLieferscheinFiles(
-          pk,
-          batch,
-          p.note || p.comment
-        );
-        uploads.push(...normalizeLsUploadItems(up));
-      }
-    } else {
-      // b) fallback vecchio: singolo imageUri
-      const img = p.imageUri as string | undefined;
-      if (img) {
-        const up = await (api as any).uploadLieferscheinFiles(pk, [
-  {
-  uri: typeof img === "string" ? img : String((img as any)?.uri || ""),
-  name:
-    typeof img === "string"
-      ? img.split("/").pop() || "file"
-      : String((img as any)?.name || "file"),
-  type:
-    typeof img === "string"
-      ? "application/octet-stream"
-      : String((img as any)?.type || "application/octet-stream"),
-},
-]);
-        uploads.push(...normalizeLsUploadItems(up));
-      }
+    const sourceRow: any = p.row ?? p;
+    const { files: _rowFiles, photos: _rowPhotos, imageUri: _rowImageUri, ...row } = sourceRow;
+    const candidates: any[] = Array.isArray(p.files) && p.files.length
+      ? p.files
+      : [
+          ...(Array.isArray(sourceRow.attachments) ? sourceRow.attachments : []),
+          ...(Array.isArray(sourceRow.photos) ? sourceRow.photos : []),
+          ...(sourceRow.imageUri ? [{ uri: sourceRow.imageUri }] : []),
+        ];
+    const seen = new Set<string>();
+    const attachments = candidates.filter((f: any) => {
+      const uri = String(f?.uri || f?.url || f?.publicUrl || "").trim();
+      if (!uri) throw new Error("LIEFERSCHEIN_ATTACHMENT_URI_MISSING");
+      if (seen.has(uri)) return false;
+      seen.add(uri);
+      return true;
+    });
+    // Queue retries always use Eingang / Pruefung, never the approval-only legacy commit.
+    const acknowledged = await (api as any).pushLieferscheinToServer(pk, {
+      ...row,
+      projectId: pk,
+      projectCode: pk,
+      workflowStatus: "EINGEREICHT",
+      attachments,
+      photos: [],
+    });
+    if (acknowledged?.ok !== true || !acknowledged?.docId) {
+      throw new Error("LIEFERSCHEIN_INBOX_NOT_CONFIRMED");
     }
-
-    const rowFromPayload = {
-      projectId: pk,
-      date: p.date,
-      lieferscheinNummer: p.lieferscheinNummer,
-      supplier: p.supplier,
-      site: p.site,
-      driver: p.driver,
-      material: p.material,
-      quantity: p.quantity,
-      unit: p.unit,
-      kostenstelle: p.kostenstelle,
-      lvItemPos: p.lvItemPos ?? null,
-      comment: p.comment ?? p.note ?? "",
-      bemerkungen: p.bemerkungen ?? "",
-      photos: uploads.map((u) => ({
-        name: u.name,
-        type: u.type,
-        uri: u.publicUrl,
-      })),
-    };
-
-    const existingRows =
-      (Array.isArray(p.rows) && p.rows) ||
-      (Array.isArray(p?.items?.lieferscheine) && p.items.lieferscheine) ||
-      null;
-
-    const rowsRaw =
-      existingRows && existingRows.length ? existingRows : [rowFromPayload];
-    const rows = rowsRaw.map((r: any) => ({ ...r, projectId: pk }));
-
-    const commitPayload = {
-      date: p.date || rowFromPayload.date,
-      note: p.note || p.comment || "",
-      bemerkungen: p.bemerkungen || "",
-      lieferscheinNummer: p.lieferscheinNummer,
-
-      rows,
-      items: p.items || { aufmass: [], lieferscheine: rows },
-
-      attachments: uploads.map((u) => ({
-        name: u.name,
-        type: u.type,
-        publicUrl: u.publicUrl,
-      })),
-
-      ...p,
-
-      upload: uploads,
-
-      projectId: pk,
-    };
-
-    return (api as any).commitLieferscheinLegacy(pk, commitPayload);
+    return acknowledged;
   }
 
   // =========================
@@ -422,7 +385,7 @@ async function syncOne(item: QueueItem) {
     const r = p?.row ?? p;
 
     const payload = {
-      docId: p?.docId || r?.id || p?.id,
+      docId: p?.docId || r?.id || p?.id || uid("ph"),
       id: p?.id || r?.id,
       date: r?.date,
       workflowStatus: r?.workflowStatus || p?.workflowStatus || "EINGEREICHT",
@@ -448,7 +411,31 @@ async function syncOne(item: QueueItem) {
 
     // SERVER_SYNC: upload only to the server-side Eingang / Prüfung.
     // The offline Inbox is reserved exclusively for NUR_APP mode.
-    return uploadPhotoNoteInbox(pk, payload);
+    const uploaded = await uploadPhotoNoteInbox(pk, payload);
+    if (uploaded?.ok !== true || String(uploaded?.docId || "") !== String(payload.docId || "")) {
+      throw new Error("FOTOS_UPLOAD_NOT_CONFIRMED");
+    }
+    return uploaded;
+  }
+
+  if (item.kind === "MENGEN_SYNC") {
+    const payload: any = item.payload || {};
+    const doc = payload?.doc ?? payload?.row ?? payload;
+    const saved = await (api as any).saveMengen(pk, doc);
+    if (saved?.ok !== true || !saved?.document?.id) {
+      throw new Error("MENGEN_SYNC_NOT_CONFIRMED");
+    }
+    return saved;
+  }
+
+  if (item.kind === "ANGEBOT_SYNC") {
+    const payload: any = item.payload || {};
+    const doc = payload?.doc ?? payload?.row ?? payload;
+    const saved = await (api as any).saveAngebot(pk, doc);
+    if (saved?.ok !== true || !saved?.document?.id) {
+      throw new Error("ANGEBOT_SYNC_NOT_CONFIRMED");
+    }
+    return saved;
   }
 
   if (

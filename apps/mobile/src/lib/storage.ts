@@ -256,10 +256,13 @@ export async function persistUriToProject(params: {
   typeHint?: string;
 }): Promise<{ uri: string; name: string; type: string }> {
   const projectFsKey = String(params.projectFsKey || "").trim();
-  if (!projectFsKey) throw new Error("persistUriToProject: projectFsKey missing");
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(projectFsKey)) throw new Error("persistUriToProject: invalid projectFsKey");
 
   const base = getBaseDirOrThrow();
   const rel = String(params.relativeDir || "").replace(/^\/+/, "").replace(/\/+$/, "");
+  if (!rel || rel.split("/").some(part => !/^[A-Za-z0-9_.-]+$/.test(part) || part === "." || part === "..")) {
+    throw new Error("persistUriToProject: invalid relativeDir");
+  }
   const dir = `${base}projects/${projectFsKey}/${rel}/`;
   await ensureDir(dir);
 
@@ -280,21 +283,18 @@ export async function persistUriToProject(params: {
 
   const ext = extFromNameOrType(cached.name, cached.type, src);
   const finalName = safeName(cached.name || `file.${ext}`);
-  const target = `${dir}${finalName}`;
-
-  // overwrite safe
-  const info = await FileSystem.getInfoAsync(target);
-  if (info.exists) {
-    try {
-      await FileSystem.deleteAsync(target, { idempotent: true });
-    } catch {}
-  }
-
+  // Preserve all attachments even when the camera supplies identical filenames.
+  const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const dot = finalName.lastIndexOf(".");
+  const uniqueName = dot > 0 ? `${finalName.slice(0, dot)}_${suffix}${finalName.slice(dot)}` : `${finalName}_${suffix}`;
+  const target = `${dir}${uniqueName}`;
   await FileSystem.copyAsync({ from: src, to: target });
+  const verified = await FileSystem.getInfoAsync(target);
+  if (!verified.exists || (verified.size !== undefined && verified.size === 0)) throw new Error("persistUriToProject: copy verification failed");
 
   return {
     uri: target.startsWith("file://") ? target : `file://${target}`,
-    name: finalName,
+    name: uniqueName,
     type: cached.type || mimeFromExt(ext),
   };
 }
